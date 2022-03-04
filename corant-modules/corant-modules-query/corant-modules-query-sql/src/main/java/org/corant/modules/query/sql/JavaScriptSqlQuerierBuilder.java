@@ -19,7 +19,7 @@ import org.corant.modules.query.FetchQueryHandler;
 import org.corant.modules.query.QueryHandler;
 import org.corant.modules.query.QueryParameter;
 import org.corant.modules.query.mapping.Query;
-import org.corant.modules.query.shared.dynamic.javascript.JavascriptDynamicQuerierBuilder;
+import org.corant.modules.query.shared.dynamic.javascript.JavaScriptDynamicQuerierBuilder;
 
 /**
  * corant-modules-query-sql
@@ -27,15 +27,15 @@ import org.corant.modules.query.shared.dynamic.javascript.JavascriptDynamicQueri
  * @author bingo 下午7:46:22
  *
  */
-public class JavascriptSqlQuerierBuilder
-    extends JavascriptDynamicQuerierBuilder<Object[], String, SqlNamedQuerier> {
+public class JavaScriptSqlQuerierBuilder
+    extends JavaScriptDynamicQuerierBuilder<Object[], String, SqlNamedQuerier> {
 
   /**
    * @param query
    * @param queryResolver
    * @param fetchQueryResolver
    */
-  public JavascriptSqlQuerierBuilder(Query query, QueryHandler queryResolver,
+  public JavaScriptSqlQuerierBuilder(Query query, QueryHandler queryResolver,
       FetchQueryHandler fetchQueryResolver) {
     super(query, queryResolver, fetchQueryResolver);
   }

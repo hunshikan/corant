@@ -38,7 +38,7 @@ public class FetchQuery implements Serializable {
   private String injectPropertyName;
   private String[] injectPropertyNamePath = Strings.EMPTY_ARRAY;
   private Class<?> resultClass = Map.class;
-  private int maxSize = 1024;
+  private int maxSize = -1;
   private List<FetchQueryParameter> parameters = new ArrayList<>();
   private boolean multiRecords = true;
   private Script predicateScript = new Script();
@@ -129,7 +129,7 @@ public class FetchQuery implements Serializable {
    * @return the maxSize
    */
   public int getMaxSize() {
-    return isMultiRecords() ? maxSize : 1;
+    return maxSize;
   }
 
   /**
@@ -165,8 +165,7 @@ public class FetchQuery implements Serializable {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + (id == null ? 0 : id.hashCode());
-    return result;
+    return prime * result + (id == null ? 0 : id.hashCode());
   }
 
   /**

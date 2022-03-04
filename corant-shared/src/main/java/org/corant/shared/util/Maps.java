@@ -61,6 +61,7 @@ import org.corant.shared.conversion.converter.factory.ListTemporalConverterFacto
 import org.corant.shared.conversion.converter.factory.MapTemporalConverterFactory;
 import org.corant.shared.exception.CorantRuntimeException;
 import org.corant.shared.exception.NotSupportedException;
+import org.corant.shared.ubiquity.TypeLiteral;
 
 /**
  * corant-shared
@@ -742,7 +743,7 @@ public class Maps {
    * @param key the key to lookup
    * @return the mapped list maps value
    */
-  public static List<Map<?, ?>> getMapMaps(final Map<?, ?> map, final Object key) {
+  public static <K, V> List<Map<K, V>> getMapMaps(final Map<?, ?> map, final Object key) {
     return getMapList(map, key, Objects::forceCast);
   }
 
@@ -803,6 +804,19 @@ public class Maps {
       final Function<Object, T> converter, final T nvt) {
     Object val = map == null ? null : map.get(key);
     return val != null ? defaultObject(converter.apply(val), nvt) : nvt;
+  }
+
+  /**
+   * Convert and return the value corresponding to the given key in the given map.
+   *
+   * @param map the map to use
+   * @param key the key to lookup
+   * @param typeLiteral the value type
+   * @return the mapped object
+   */
+  public static <T> T getMapObject(final Map<?, ?> map, final Object key,
+      final TypeLiteral<T> typeLiteral) {
+    return map == null ? null : toObject(map.get(key), typeLiteral);
   }
 
   /**
@@ -1023,8 +1037,18 @@ public class Maps {
 
   public static Map<String, String> toMap(final Properties properties) {
     Map<String, String> map = new HashMap<>(shouldNotNull(properties).size());
-    if (properties != null) {
-      properties.stringPropertyNames().forEach(name -> map.put(name, properties.getProperty(name)));
+    synchronized (properties) {
+      for (Entry<Object, Object> entry : properties.entrySet()) {
+        Object key = entry.getKey();
+        Object val = entry.getValue();
+        if (key != null && val != null) {
+          map.put(key.toString(), val.toString());
+        } else if (key != null) {
+          map.put(key.toString(), null);
+        } else if (val != null) {
+          map.put(null, val.toString());
+        }
+      }
     }
     return map;
   }
@@ -1032,7 +1056,7 @@ public class Maps {
   public static <K, V> Properties toProperties(final Map<K, V> map) {
     Properties pops = new Properties();
     if (map != null) {
-      map.forEach((k, v) -> pops.getProperty(forceCast(k), forceCast(v)));
+      pops.putAll(map);
     }
     return pops;
   }
@@ -1103,7 +1127,7 @@ public class Maps {
               throw new NotSupportedException("We only support implants for a map object!");
             }
           }
-        } else if (next != null && next.getClass().isArray()) {
+        } else if (next.getClass().isArray()) {
           for (Object item : wrapArray(next)) {
             if (item instanceof Map) {
               implantMapValue((Map) item, paths, nextDeep, value);
@@ -1160,18 +1184,14 @@ public class Maps {
       } else {
         throw new NotSupportedException("We only extract value from map/iterable/array object");
       }
-    } else {
-      if (value instanceof Iterable && flat) {
-        for (Object next : (Iterable<?>) value) {
-          holder.add(next);
-        }
-      } else if (value.getClass().isArray() && flat) {
-        for (Object next : (Object[]) value) {
-          holder.add(next);
-        }
-      } else {
-        holder.add(value);
+    } else if (value instanceof Iterable && flat) {
+      for (Object next : (Iterable<?>) value) {
+        holder.add(next);
       }
+    } else if (value.getClass().isArray() && flat) {
+      Collections.addAll(holder, (Object[]) value);
+    } else {
+      holder.add(value);
     }
   }
 
@@ -1219,8 +1239,7 @@ public class Maps {
     public int hashCode() {
       final int prime = 31;
       int result = 1;
-      result = prime * result + keys.hashCode();
-      return result;
+      return prime * result + keys.hashCode();
     }
 
     FlatMapKey append(Object key) {

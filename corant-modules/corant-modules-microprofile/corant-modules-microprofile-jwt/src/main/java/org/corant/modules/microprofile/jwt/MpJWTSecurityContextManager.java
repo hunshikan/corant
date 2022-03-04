@@ -30,7 +30,7 @@ import javax.ws.rs.core.SecurityContext;
 import org.corant.context.security.SecurityContexts;
 import org.corant.modules.security.SecurityContextManager;
 import org.corant.modules.security.shared.DefaultSecurityContext;
-import org.corant.modules.security.shared.UserPrincipal;
+import org.corant.modules.security.shared.IdentifierPrincipal;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 /**
@@ -52,13 +52,13 @@ public class MpJWTSecurityContextManager implements SecurityContextManager<Secur
       Map<String, Serializable> map = new HashMap<>();
       for (String cn : principal.getClaimNames()) {
         Object co = principal.getClaim(cn);
-        if (!cn.equals("raw_token")) {
+        if (!"raw_token".equals(cn)) {
           map.put(cn, convert(co));
         }
       }
       SecurityContexts
           .setCurrent(new DefaultSecurityContext(securityContext.getAuthenticationScheme(),
-              new UserPrincipal(principal.getSubject(), principal.getName(), map)));
+              new IdentifierPrincipal(principal.getSubject(), principal.getName(), map)));
     } else {
       logger.fine(() -> "Bind empty security context to SecurityContexts.");
       SecurityContexts.setCurrent(null);

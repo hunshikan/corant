@@ -17,6 +17,7 @@ import static org.corant.shared.normal.Names.ConfigNames.CFG_LOCATION_EXCLUDE_PA
 import static org.corant.shared.normal.Names.ConfigNames.CFG_PROFILE_KEY;
 import static org.corant.shared.util.Empties.isNotEmpty;
 import static org.corant.shared.util.Strings.isNotBlank;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 import org.corant.Corant;
 import org.corant.context.Beans;
+import org.corant.shared.exception.CorantRuntimeException;
 import org.corant.shared.util.Strings;
 import org.junit.runners.model.Statement;
 
@@ -56,6 +58,9 @@ public interface CorantJunit4Runner {
             CORANTS.get().start(null);
           }
           classBlock.get().evaluate();
+        } catch (Exception e) {
+          e.printStackTrace();
+          throw new CorantRuntimeException(e);
         } finally {
           if (!isEmbedded()) {
             if (isNotBlank(PROFILES.get())) {
@@ -98,9 +103,7 @@ public interface CorantJunit4Runner {
       if (rc.configClass() != null && !rc.configClass().equals(Object.class)) {
         classes.add(rc.configClass());
       }
-      for (Class<?> cls : rc.beanClasses()) {
-        classes.add(cls);
-      }
+      Collections.addAll(classes, rc.beanClasses());
       ENA_RDM_WEB_PORTS.set(rc.randomWebPort());
       if (isNotBlank(rc.profile())) {
         PROFILES.set(rc.profile());

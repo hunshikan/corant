@@ -14,18 +14,21 @@
 package org.corant.modules.query.shared;
 
 import static org.corant.context.Beans.select;
+import static org.corant.modules.query.QueryParameter.CTX_QHH_EXCLUDE_FETCH_QUERY;
 import static org.corant.shared.util.Assertions.shouldNotEmpty;
 import static org.corant.shared.util.Conversions.toBoolean;
 import static org.corant.shared.util.Conversions.toList;
 import static org.corant.shared.util.Conversions.toObject;
 import static org.corant.shared.util.Empties.isEmpty;
 import static org.corant.shared.util.Lists.listOf;
-import static org.corant.shared.util.Maps.getMapKeyPathValues;
-import static org.corant.shared.util.Maps.putMapKeyPathValue;
+import static org.corant.shared.util.Maps.getMapString;
+import static org.corant.shared.util.Objects.areEqual;
 import static org.corant.shared.util.Objects.defaultObject;
 import static org.corant.shared.util.Sets.setOf;
 import static org.corant.shared.util.Strings.asDefaultString;
-import java.lang.reflect.InvocationTargetException;
+import static org.corant.shared.util.Strings.isNotBlank;
+import static org.corant.shared.util.Strings.matchWildcard;
+import static org.corant.shared.util.Strings.split;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -38,7 +41,6 @@ import java.util.logging.Logger;
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-import org.apache.commons.beanutils.BeanUtils;
 import org.corant.context.service.ConversionService;
 import org.corant.modules.query.FetchQueryHandler;
 import org.corant.modules.query.QueryObjectMapper;
@@ -48,10 +50,12 @@ import org.corant.modules.query.QueryRuntimeException;
 import org.corant.modules.query.mapping.FetchQuery;
 import org.corant.modules.query.mapping.FetchQuery.FetchQueryParameter;
 import org.corant.modules.query.mapping.FetchQuery.FetchQueryParameterSource;
+import org.corant.modules.query.shared.ScriptProcessor.ParameterAndResult;
+import org.corant.modules.query.shared.ScriptProcessor.ParameterAndResultPair;
 import org.corant.modules.query.spi.QueryParameterReviser;
-import org.corant.shared.normal.Names;
 import org.corant.shared.ubiquity.Mutable.MutableObject;
 import org.corant.shared.ubiquity.Sortable;
+import org.corant.shared.util.Strings.WildcardMatcher;
 
 /**
  * corant-modules-query-shared
@@ -70,12 +74,25 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
   protected QueryObjectMapper objectMapper;
 
   @Inject
+  protected QueryScriptEngines scriptEngines;
+
+  @Inject
   protected Logger logger;
 
   @Override
   public boolean canFetch(Object result, QueryParameter queryParameter, FetchQuery fetchQuery) {
-    Function<Object[], Object> fun = QueryScriptEngines.resolveFetchPredicates(fetchQuery);
-    return fun == null || toBoolean(fun.apply(new Object[] {queryParameter, result}));
+    String exs = getMapString(queryParameter.getContext(), CTX_QHH_EXCLUDE_FETCH_QUERY);
+    if (isNotBlank(exs)) {
+      final String fetchQueryName = fetchQuery.getReferenceQuery().getVersionedName();
+      for (String ex : split(exs, ",", true, true)) {
+        if (WildcardMatcher.hasWildcard(ex) && matchWildcard(fetchQueryName, false, ex)
+            || areEqual(fetchQueryName, ex)) {
+          return false;
+        }
+      }
+    }
+    Function<ParameterAndResult, Object> fun = scriptEngines.resolveFetchPredicates(fetchQuery);
+    return fun == null || toBoolean(fun.apply(new ParameterAndResult(queryParameter, result)));
   }
 
   @Override
@@ -84,47 +101,48 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
   }
 
   @Override
-  public void handleFetchedResult(Object result, List<?> fetchedResults, FetchQuery fetchQuery) {
+  public void handleFetchedResult(QueryParameter parameter, Object result, List<?> fetchedResults,
+      FetchQuery fetchQuery) {
     if (result == null) {
       return;
     }
-    Function<Object[], Object> fun = QueryScriptEngines.resolveFetchInjections(fetchQuery);
+    Function<ParameterAndResultPair, Object> fun = scriptEngines.resolveFetchInjections(fetchQuery);
     if (fun != null) {
-      fun.apply(new Object[] {new Object[] {result}, fetchedResults});
+      fun.apply(new ParameterAndResultPair(parameter, listOf(result), fetchedResults));
     } else {
       String[] injectProNamePath = shouldNotEmpty(fetchQuery.getInjectPropertyNamePath());
       if (isEmpty(fetchedResults)) {
-        injectFetchedResult(result, null, injectProNamePath);
+        objectMapper.putMappedValue(result, injectProNamePath, null);
+      } else if (fetchQuery.isMultiRecords()) {
+        objectMapper.putMappedValue(result, injectProNamePath, fetchedResults);
       } else {
-        if (fetchQuery.isMultiRecords()) {
-          injectFetchedResult(result, fetchedResults, injectProNamePath);
-        } else {
-          injectFetchedResult(result, fetchedResults.iterator().next(), injectProNamePath);
-        }
+        objectMapper.putMappedValue(result, injectProNamePath, fetchedResults.iterator().next());
       }
     }
   }
 
   @Override
-  public void handleFetchedResults(List<?> results, List<?> fetchedResults, FetchQuery fetchQuery) {
+  public void handleFetchedResults(QueryParameter parameter, List<?> results,
+      List<?> fetchedResults, FetchQuery fetchQuery) {
     if (isEmpty(results)) {
       return;
     }
-    Function<Object[], Object> fun = QueryScriptEngines.resolveFetchInjections(fetchQuery);
+    Function<ParameterAndResultPair, Object> fun = scriptEngines.resolveFetchInjections(fetchQuery);
     if (fun != null) {
-      fun.apply(new Object[] {results, defaultObject(fetchedResults, ArrayList::new)});
+      fun.apply(new ParameterAndResultPair(parameter, results,
+          defaultObject(fetchedResults, ArrayList::new)));
     } else {
       String[] injectProNamePath = shouldNotEmpty(fetchQuery.getInjectPropertyNamePath());
       if (isEmpty(fetchedResults)) {
         for (Object result : results) {
-          injectFetchedResult(result, null, injectProNamePath);
+          objectMapper.putMappedValue(result, injectProNamePath, null);
         }
       } else {
         for (Object result : results) {
           if (fetchQuery.isMultiRecords()) {
-            injectFetchedResult(result, fetchedResults, injectProNamePath);
+            objectMapper.putMappedValue(result, injectProNamePath, fetchedResults);
           } else {
-            injectFetchedResult(result, fetchedResults.get(0), injectProNamePath);
+            objectMapper.putMappedValue(result, injectProNamePath, fetchedResults.get(0));
           }
         }
       }
@@ -133,10 +151,10 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
 
   @Override
   public QueryParameter resolveFetchQueryParameter(Object result, FetchQuery query,
-      QueryParameter parentQueryparameter) {
-    MutableObject<QueryParameter> resolved = new MutableObject<>(
-        new DefaultQueryParameter().context(parentQueryparameter.getContext()).criteria(
-            resolveFetchQueryCriteria(result, query, extractCriterias(parentQueryparameter))));
+      QueryParameter parentQueryParameter) {
+    MutableObject<QueryParameter> resolved =
+        new MutableObject<>(new DefaultQueryParameter().context(parentQueryParameter.getContext())
+            .criteria(resolveFetchQueryCriteria(result, query, parentQueryParameter)));
     select(QueryParameterReviser.class).stream().filter(r -> r.supports(query))
         .sorted(Sortable::compare).forEach(resolved::apply);
     return resolved.get();
@@ -150,7 +168,7 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
     }
   }
 
-  protected Map<String, Object> extractCriterias(QueryParameter parameter) {
+  protected Map<String, Object> extractCriteria(QueryParameter parameter) {
     Map<String, Object> map = new HashMap<>();
     if (parameter != null) {
       Object criteria = parameter.getCriteria();
@@ -163,28 +181,14 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
     return map;
   }
 
-  protected void injectFetchedResult(Object result, Object fetchedResult,
-      String[] injectProNamePath) {
-    if (result instanceof Map) {
-      putMapKeyPathValue((Map) result, injectProNamePath, fetchedResult);
-    } else if (result != null) {
-      try {
-        BeanUtils.setProperty(result, String.join(Names.NAME_SPACE_SEPARATORS, injectProNamePath),
-            fetchedResult);
-      } catch (IllegalAccessException | InvocationTargetException e) {
-        throw new QueryRuntimeException(e, "Inject fetched result occurred error %s.",
-            e.getMessage());
-      }
-    }
-  }
-
   @PreDestroy
   protected synchronized void onPreDestroy() {
     logger.fine(() -> "Clear default fetch query handler caches.");
   }
 
   protected Map<String, Object> resolveFetchQueryCriteria(Object result, FetchQuery fetchQuery,
-      Map<String, Object> criteria) {
+      QueryParameter parentQueryParameter) {
+    Map<String, Object> criteria = extractCriteria(parentQueryParameter);
     Map<String, Object> fetchCriteria = new HashMap<>();
     for (FetchQueryParameter parameter : fetchQuery.getParameters()) {
       final Class<?> type = parameter.getType();
@@ -199,9 +203,9 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
         fetchCriteria.put(name, convertCriteriaValue(criteria.get(sourceName), type));
       } else if (source == FetchQueryParameterSource.S) {
         // the parameter script handling
-        Function<Object[], Object> fun = QueryScriptEngines.resolveFetchParameter(parameter);
-        List<Object> parentReuslt = result instanceof List ? (List) result : listOf(result);
-        Object resultValue = fun.apply(new Object[] {criteria, parentReuslt});
+        Function<ParameterAndResult, Object> fun = scriptEngines.resolveFetchParameter(parameter);
+        List<Object> parentResults = result instanceof List ? (List) result : listOf(result);
+        Object resultValue = fun.apply(new ParameterAndResult(parentQueryParameter, parentResults));
         resultValue = resolveFetchQueryCriteriaValueResult(resultValue, distinct, singleAsList);
         fetchCriteria.put(name, convertCriteriaValue(resultValue, type));
       } else if (result != null) {
@@ -211,7 +215,7 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
             // handle multi results
             Collection<Object> values = distinct ? new LinkedHashSet<>() : new ArrayList<>();
             for (Object resultItem : (List<?>) result) {
-              Object resultItemValue = resolveFetchQueryCriteriaValue(resultItem, namePath);
+              Object resultItemValue = objectMapper.getMappedValue(resultItem, namePath);
               if (resultItemValue instanceof Collection) {
                 values.addAll((Collection) convertCriteriaValue(resultItemValue, type));
               } else if (resultItemValue != null) {
@@ -221,11 +225,11 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
             fetchCriteria.put(name, values);
           } else {
             // handle single results
-            Object resultValue = resolveFetchQueryCriteriaValue(result, namePath);
+            Object resultValue = objectMapper.getMappedValue(result, namePath);
             resultValue = resolveFetchQueryCriteriaValueResult(resultValue, distinct, singleAsList);
             fetchCriteria.put(name, convertCriteriaValue(resultValue, type));
           }
-        } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+        } catch (Exception e) {
           throw new QueryRuntimeException(e,
               "Can not extract value from query result for resolve fetch query [%s] parameter!",
               fetchQuery.getReferenceQuery());
@@ -233,20 +237,6 @@ public class DefaultFetchQueryHandler implements FetchQueryHandler {
       }
     }
     return fetchCriteria;
-  }
-
-  protected Object resolveFetchQueryCriteriaValue(Object result, String[] sourceNamePath)
-      throws IllegalAccessException, InvocationTargetException, NoSuchMethodException {
-    if (result instanceof Map) {
-      if (sourceNamePath.length > 1) {
-        List<Object> values = getMapKeyPathValues(result, sourceNamePath);
-        return values.isEmpty() ? null : values.size() == 1 ? values.get(0) : values;
-      } else {
-        return ((Map) result).get(sourceNamePath[0]);
-      }
-    } else {
-      return BeanUtils.getProperty(result, String.join(".", sourceNamePath));
-    }
   }
 
   protected Object resolveFetchQueryCriteriaValueResult(Object resultValue, boolean distinct,

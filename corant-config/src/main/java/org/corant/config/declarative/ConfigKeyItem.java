@@ -15,50 +15,59 @@ package org.corant.config.declarative;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
+import static org.corant.shared.util.Objects.defaultObject;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 import javax.enterprise.util.AnnotationLiteral;
 import org.corant.shared.util.Strings;
 
-@Documented
-@Retention(RUNTIME)
-@Target(FIELD)
 /**
  * corant-config
  *
  * @author bingo 下午7:39:01
  *
  */
+@Documented
+@Retention(RUNTIME)
+@Target(FIELD)
 public @interface ConfigKeyItem {
 
   String NO_DFLT_VALUE = "$no_default_value$";
 
-  ConfigKeyItem EMPTY = new ConfigKeyItemLiteral();
-
   String defaultValue() default NO_DFLT_VALUE;
 
-  DeclarativePattern pattern() default DeclarativePattern.SUFFIX;
-
   String name() default Strings.EMPTY;
+
+  DeclarativePattern pattern() default DeclarativePattern.SUFFIX;
 
   class ConfigKeyItemLiteral extends AnnotationLiteral<ConfigKeyItem> implements ConfigKeyItem {
 
     private static final long serialVersionUID = -6856666130654737130L;
 
-    @Override
-    public String defaultValue() {
-      return NO_DFLT_VALUE;
+    final String defaultValue;
+    final String name;
+    final DeclarativePattern pattern;
+
+    public ConfigKeyItemLiteral(String defaultValue, String name, DeclarativePattern pattern) {
+      this.defaultValue = defaultObject(defaultValue, NO_DFLT_VALUE);
+      this.name = name;
+      this.pattern = pattern;
     }
 
     @Override
-    public DeclarativePattern pattern() {
-      return DeclarativePattern.SUFFIX;
+    public String defaultValue() {
+      return defaultValue;
     }
 
     @Override
     public String name() {
-      return Strings.EMPTY;
+      return name;
+    }
+
+    @Override
+    public DeclarativePattern pattern() {
+      return pattern;
     }
 
   }

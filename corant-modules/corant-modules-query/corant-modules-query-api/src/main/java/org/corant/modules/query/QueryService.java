@@ -17,8 +17,6 @@ import static org.corant.shared.util.Empties.isNotEmpty;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -41,52 +39,21 @@ public interface QueryService<Q, P> {
   <T> Forwarding<T> forward(Q q, P p);
 
   /**
-   * Like {@link #forward(Object, Object)} but support an result record handler callback.
-   *
-   * @param <R> The orginal result record object type, usually is an Map.
-   * @param <T> The expected query result set record type.
-   * @param q The query object reference, in named query this parameter may be the name of query.
-   * @param p The query parameter, include query criteria and context.
-   * @param f The result record handler callback.
-   * @return The result set and whether there is a flag for the next result set.
-   */
-  default <R, T> Forwarding<T> forward(Q q, P p, BiFunction<R, QueryService<Q, P>, T> f) {
-    Forwarding<R> raw = forward(q, p);
-    if (raw == null) {
-      return Forwarding.inst();
-    } else {
-      Forwarding<T> result = new Forwarding<>();
-      return result
-          .withResults(
-              raw.getResults().stream().map(i -> f.apply(i, this)).collect(Collectors.toList()))
-          .withHasNext(raw.hasNext);
-    }
-  }
-
-  /**
    * Query a single result.
    *
    * @param <T> The expected query result object type.
    * @param q The query object reference, in named query this parameter may be the name of query.
    * @param p The query parameter, include query criteria and context.
-   * @return The query result object.
+   * @return A single specified type result
    */
   <T> T get(Q q, P p);
 
   /**
-   * Like {@link #get(Object, Object)} but support an result record handler callback.
+   * Returns a query object mapper to be used in result type conversion.
    *
-   * @param <R> The orginal result record object type, usually is an Map.
-   * @param <T> The expected query result object type.
-   * @param q The query object reference, in named query this parameter may be the name of query.
-   * @param p The query parameter, include query criteria and context.
-   * @param f The result record handler callback.
-   * @return The query result object.
+   * @return getQueryObjectMapper
    */
-  default <R, T> T get(Q q, P p, BiFunction<R, QueryService<Q, P>, T> f) {
-    R t = get(q, p);
-    return f.apply(t, this);
-  }
+  QueryObjectMapper getObjectMapper();
 
   /**
    * Paging query, returns the query result set and total record counts etc.
@@ -99,56 +66,14 @@ public interface QueryService<Q, P> {
   <T> Paging<T> page(Q q, P p);
 
   /**
-   * Like {@link #page(Object, Object)} but support an result record handler callback.
-   *
-   * @param <R> The orginal result record object type, usually is an Map.
-   * @param <T> The expected query result object type.
-   * @param q The query object reference, in named query this parameter may be the name of query.
-   * @param p The query parameter, include query criteria and context.
-   * @param f The result record handler callback.
-   * @return The query result object.
-   */
-  default <R, T> Paging<T> page(Q q, P p, BiFunction<R, QueryService<Q, P>, T> f) {
-    Paging<R> raw = page(q, p);
-    if (raw == null) {
-      return Paging.inst();
-    } else {
-      Paging<T> result = new Paging<>();
-      return result
-          .withResults(
-              raw.getResults().stream().map(i -> f.apply(i, this)).collect(Collectors.toList()))
-          .withTotal(raw.total);
-    }
-  }
-
-  /**
    * Query list results
    *
    * @param <T> The expected query result object type.
    * @param q The query object reference, in named query this parameter may be the name of query.
    * @param p The query parameter, include query criteria and context.
-   * @return The query result list
+   * @return A list of result sets
    */
   <T> List<T> select(Q q, P p);
-
-  /**
-   * Like {@link #select(Object, Object)} but support an result record handler callback.
-   *
-   * @param <R> The orginal result record object type, usually is an Map.
-   * @param <T> The expected query result object type.
-   * @param q The query object reference, in named query this parameter may be the name of query.
-   * @param p The query parameter, include query criteria and context.
-   * @param f The result record handler callback.
-   * @return The query result list
-   */
-  default <R, T> List<T> select(Q q, P p, BiFunction<R, QueryService<Q, P>, T> f) {
-    List<R> raw = select(q, p);
-    if (raw == null) {
-      return new ArrayList<>();
-    } else {
-      return raw.stream().map(i -> f.apply(i, this)).collect(Collectors.toList());
-    }
-  }
 
   /**
    * Query stream results, use for mass data query.
@@ -164,10 +89,10 @@ public interface QueryService<Q, P> {
    * }
    * </pre>
    *
-   * @param <T>
-   * @param q
-   * @param p
-   * @return stream
+   * @param <T> The expected query result object type.
+   * @param q The query object reference, in named query this parameter may be the name of query.
+   * @param p The query parameter, include query criteria and context.
+   * @return A stream of result sets
    */
   <T> Stream<T> stream(Q q, P p);
 

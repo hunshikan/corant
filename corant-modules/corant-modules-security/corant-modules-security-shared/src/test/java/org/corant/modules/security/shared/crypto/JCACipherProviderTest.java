@@ -11,18 +11,19 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.corant.modules.security.shared.crypto.hash;
+package org.corant.modules.security.shared.crypto;
 
 import static org.junit.Assert.assertArrayEquals;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.stream.IntStream;
-import org.corant.modules.security.shared.crypto.Keys;
 import org.corant.modules.security.shared.crypto.cipher.AESCBCCipherProvider;
 import org.corant.modules.security.shared.crypto.cipher.AESCTRCipherProvider;
 import org.corant.modules.security.shared.crypto.cipher.AESGCMCipherProvider;
 import org.corant.modules.security.shared.crypto.cipher.BlowfishCBCCipherProvider;
 import org.corant.modules.security.shared.crypto.cipher.BlowfishCipherProvider;
+import org.corant.modules.security.shared.crypto.cipher.SM4CBCCipherProvider;
+import org.corant.modules.security.shared.crypto.cipher.SM4ECBCipherProvider;
 import org.corant.modules.security.shared.crypto.cipher.SymmetricCipherProvider;
 import org.corant.modules.security.shared.crypto.cipher.TripleDESCTRCipherProvider;
 import org.corant.modules.security.shared.crypto.cipher.TripleDESECBCipherProvider;
@@ -98,6 +99,34 @@ public class JCACipherProviderTest extends TestCase {
     for (Integer i : BlowfishCBCCipherProvider.ALLOW_KEY_BIT_SIZES) {
       byte[] keyBytes = Keys.generateSecretKey(BlowfishCBCCipherProvider.ALGORITHM, i).getEncoded();
       provider = new BlowfishCBCCipherProvider(keyBytes);
+      testJCA("", provider);
+      testJCA(content, provider);
+      final SymmetricCipherProvider itp = provider;
+      IntStream.range(0, 20).forEach(x -> testJCA(content.repeat(Randoms.randomInt(x, 1000)), itp));
+    }
+  }
+
+  @Test
+  public void testSM4CBC() {
+    SymmetricCipherProvider provider;
+    for (Integer i : SM4CBCCipherProvider.ALLOW_KEY_BIT_SIZES) {
+      byte[] keyBytes = Keys.generateSecretKey(Providers.BOUNCYCASTLE_PROVIDER,
+          SM4CBCCipherProvider.ALGORITHM, i, null).getEncoded();
+      provider = new SM4CBCCipherProvider(keyBytes);
+      testJCA("", provider);
+      testJCA(content, provider);
+      final SymmetricCipherProvider itp = provider;
+      IntStream.range(0, 20).forEach(x -> testJCA(content.repeat(Randoms.randomInt(x, 1000)), itp));
+    }
+  }
+
+  @Test
+  public void testSM4ECB() {
+    SymmetricCipherProvider provider;
+    for (Integer i : SM4ECBCipherProvider.ALLOW_KEY_BIT_SIZES) {
+      byte[] keyBytes = Keys.generateSecretKey(Providers.BOUNCYCASTLE_PROVIDER,
+          SM4ECBCipherProvider.ALGORITHM, i, null).getEncoded();
+      provider = new SM4ECBCipherProvider(keyBytes);
       testJCA("", provider);
       testJCA(content, provider);
       final SymmetricCipherProvider itp = provider;

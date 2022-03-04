@@ -37,10 +37,6 @@ public class PropertiesConfigSource extends AbstractCorantConfigSource {
 
   final Map<String, String> properties;
 
-  /**
-   * @param resourceUrl
-   * @param ordinal
-   */
   public PropertiesConfigSource(URL resourceUrl, int ordinal) {
     this(shouldNotNull(resourceUrl).toExternalForm(), ordinal, toMap(getProperties(resourceUrl)));
   }
@@ -49,11 +45,7 @@ public class PropertiesConfigSource extends AbstractCorantConfigSource {
     this(name, ordinal, toMap(load(is)));
   }
 
-  /**
-   * @param properties
-   */
   PropertiesConfigSource(String name, int ordinal, Map<String, String> properties) {
-    super();
     this.name = name;
     this.ordinal = ordinal;
     if (properties != null) {
@@ -63,8 +55,8 @@ public class PropertiesConfigSource extends AbstractCorantConfigSource {
     }
   }
 
-  public static Properties getProperties(URL url) {
-    try (InputStream is = shouldNotNull(url).openStream()) {
+  protected static Properties getProperties(URL url) {
+    try (InputStream is = url.openStream()) {
       return load(is);
     } catch (IOException e) {
       throw new CorantRuntimeException(e,

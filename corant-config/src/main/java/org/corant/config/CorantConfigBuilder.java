@@ -31,8 +31,8 @@ import org.corant.config.CorantConfigConversion.OrdinalConverter;
 import org.corant.config.source.MicroprofileConfigSources;
 import org.corant.config.source.SystemEnvironmentConfigSource;
 import org.corant.config.source.SystemPropertiesConfigSource;
-import org.corant.shared.exception.CorantRuntimeException;
 import org.corant.shared.normal.Names;
+import org.corant.shared.util.StopWatch;
 import org.corant.shared.util.Strings;
 import org.corant.shared.util.Systems;
 import org.eclipse.microprofile.config.Config;
@@ -82,12 +82,14 @@ public class CorantConfigBuilder implements ConfigBuilder {
 
   @Override
   public Config build() {
+    StopWatch sw = StopWatch.press("Build configurations");
     CorantConfigSources configSources = CorantConfigSources.of(sources, classLoader);
     CorantConfig config = new CorantConfig(new CorantConfigConversion(converters), configSources);
     if (!Systems.getProperty(Names.CORANT_PREFIX + "config.builder.ignore-validate", Boolean.class,
         false)) {
       validate(configSources, config);
     }
+    sw.destroy(logger);
     return config;
   }
 
@@ -144,7 +146,7 @@ public class CorantConfigBuilder implements ConfigBuilder {
     }
     logger.fine(() -> String.format("The config property expressions is %s.",
         sources.isExpressionsEnabled() ? "enabled" : "disabled"));
-    logger.fine(() -> String.format("Found %s config sources:%n%n[%n  %s%n]%n%n",
+    logger.fine(() -> String.format("config_sources found %s:%n%n[%n  %s%n]%n%n",
         sources.getSources().size(), sources.getSources().stream().map(CorantConfigSource::getName)
             .collect(Collectors.joining(",\n  "))));
 
@@ -170,21 +172,17 @@ public class CorantConfigBuilder implements ConfigBuilder {
     }
 
     logger.fine(() -> {
-      StringBuilder sb = new StringBuilder("Resolved config properties:\n\n{\n");
+      StringBuilder sb = new StringBuilder("config_properties resolved:\n\n{\n");
       sortMap.forEach((k, v) -> sb.append("  ").append(k).append(" : ").append(v).append("\n"));
       sb.append("}\n\n");
       return sb.toString();
     });
     sortMap.clear();
     if (thrown != null
-        && !Systems.getProperty(Names.CORANT_PREFIX + "config.builder.supress-exception",
+        && !Systems.getProperty(Names.CORANT_PREFIX + "config.builder.suppress-exception",
             Boolean.class, false)) {
       // logger.log(Level.SEVERE, thrown, () -> "Process configurations occurred error");
-      if (thrown instanceof RuntimeException) {
-        throw (RuntimeException) thrown;
-      } else {
-        throw new CorantRuntimeException(thrown);
-      }
+      throw (RuntimeException) thrown;
     }
   }
 

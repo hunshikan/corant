@@ -15,13 +15,22 @@ package org.corant.context.concurrent;
 
 import static org.corant.shared.util.Classes.tryAsClass;
 import static org.corant.shared.util.Lists.newArrayList;
+import static org.corant.shared.util.Objects.defaultObject;
 import static org.corant.shared.util.Strings.isNotBlank;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import javax.annotation.Priority;
 import javax.enterprise.concurrent.ContextService;
 import javax.enterprise.concurrent.ManagedExecutorService;
 import javax.enterprise.concurrent.ManagedScheduledExecutorService;
@@ -30,12 +39,18 @@ import javax.enterprise.event.Observes;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.literal.NamedLiteral;
 import javax.enterprise.inject.spi.AfterBeanDiscovery;
+import javax.enterprise.inject.spi.AfterDeploymentValidation;
+import javax.enterprise.inject.spi.BeanManager;
 import javax.enterprise.inject.spi.BeforeBeanDiscovery;
 import javax.enterprise.inject.spi.Extension;
+import javax.enterprise.inject.spi.ProcessAnnotatedType;
+import javax.enterprise.inject.spi.WithAnnotations;
+import javax.interceptor.Interceptor;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import org.corant.config.Configs;
 import org.corant.context.concurrent.ContextServiceConfig.ContextInfo;
+import org.corant.context.concurrent.annotation.Asynchronous;
 import org.corant.context.concurrent.executor.DefaultContextService;
 import org.corant.context.concurrent.executor.DefaultManagedExecutorService;
 import org.corant.context.concurrent.executor.DefaultManagedScheduledExecutorService;
@@ -49,6 +64,7 @@ import org.corant.context.qualifier.Qualifiers.DefaultNamedQualifierObjectManage
 import org.corant.context.qualifier.Qualifiers.NamedQualifierObjectManager;
 import org.corant.shared.exception.CorantRuntimeException;
 import org.corant.shared.normal.Names.JndiNames;
+import org.corant.shared.normal.Priorities;
 import org.glassfish.enterprise.concurrent.ManagedExecutorServiceAdapter;
 import org.glassfish.enterprise.concurrent.ManagedScheduledExecutorServiceAdapter;
 
@@ -60,15 +76,32 @@ import org.glassfish.enterprise.concurrent.ManagedScheduledExecutorServiceAdapte
  */
 public class ConcurrentExtension implements Extension {
 
+  public static final String ENABLE_DFLT_MES_CFG =
+      "corant.concurrent.enable-default-managed-executor";
+  public static final String ENABLE_DFLT_MSES_CFG =
+      "corant.concurrent.enable-default-managed-scheduled-executor";
+  public static final String ENABLE_DFLT_CS_CFG =
+      "corant.concurrent.enable-default-context-service";
+  public static final String ENABLE_HUNG_TASK_LOGGER_CFG =
+      "corant.concurrent.enable-hung-task-logger";
+  public static final String ENABLE_CONCURRENT_THROTTLE_INTERCEPTOR_CFG =
+      "corant.concurrent.enable-concurrent-throttle-interceptor";
+  public static final String ENABLE_ASYNC_INTERCEPTOR_CFG =
+      "corant.concurrent.enable-concurrent-asynchronous-interceptor";
   public static final String JNDI_SUBCTX_NAME = JndiNames.JNDI_COMP_NME + "/concurrent";
-  public static final boolean ENABLE_DFLT_MES = Configs
-      .getValue("corant.concurrent.enable-default-managed-executor", Boolean.class, Boolean.TRUE);
-  public static final boolean ENABLE_DFLT_MSES = Configs.getValue(
-      "corant.concurrent.enable-default-managed-scheduled-executor", Boolean.class, Boolean.TRUE);
-  public static final boolean ENABLE_DFLT_CS = Configs
-      .getValue("corant.concurrent.enable-default-context-service", Boolean.class, Boolean.TRUE);
+
+  public static final boolean ENABLE_DFLT_MES =
+      Configs.<Boolean>getValue(ENABLE_DFLT_MES_CFG, Boolean.class, Boolean.TRUE);
+  public static final boolean ENABLE_DFLT_MSES =
+      Configs.<Boolean>getValue(ENABLE_DFLT_MSES_CFG, Boolean.class, Boolean.TRUE);
+  public static final boolean ENABLE_DFLT_CS =
+      Configs.<Boolean>getValue(ENABLE_DFLT_CS_CFG, Boolean.class, Boolean.TRUE);
   public static final boolean ENABLE_HUNG_TASK_LOGGER =
-      Configs.getValue("corant.concurrent.enable-hung-task-logger", Boolean.class, Boolean.FALSE);
+      Configs.<Boolean>getValue(ENABLE_HUNG_TASK_LOGGER_CFG, Boolean.class, Boolean.FALSE);
+  public static final boolean ENABLE_CONCURRENT_THROTTLE_INTERCEPTOR = Configs
+      .<Boolean>getValue(ENABLE_CONCURRENT_THROTTLE_INTERCEPTOR_CFG, Boolean.class, Boolean.FALSE);
+  public static final boolean ENABLE_ASYNC_INTERCEPTOR =
+      Configs.<Boolean>getValue(ENABLE_ASYNC_INTERCEPTOR_CFG, Boolean.class, Boolean.FALSE);
 
   protected final Logger logger = Logger.getLogger(this.getClass().getName());
 
@@ -79,6 +112,13 @@ public class ConcurrentExtension implements Extension {
   protected volatile NamedQualifierObjectManager<ContextServiceConfig> contextServiceConfigs =
       NamedQualifierObjectManager.empty();
   protected volatile InitialContext jndi;
+
+  protected Set<Class<?>> asyncBeanClass = new HashSet<>();
+  protected Map<Asynchronous, AsynchronousConfig> asyncConfigs = new ConcurrentHashMap<>();
+
+  public AsynchronousConfig getAsynchronousConfig(Asynchronous ann) {
+    return asyncConfigs.get(ann);
+  }
 
   public NamedQualifierObjectManager<ManagedExecutorConfig> getExecutorConfigs() {
     return executorConfigs;
@@ -176,6 +216,18 @@ public class ConcurrentExtension implements Extension {
     contextServiceConfigs = new DefaultNamedQualifierObjectManager<>(cscs);
   }
 
+  protected void onProcessAsynchronousAnnotatedType(
+      @Observes @Priority(Priorities.FRAMEWORK_HIGHER) @WithAnnotations({
+          Asynchronous.class}) ProcessAnnotatedType<?> event) {
+    if (ENABLE_ASYNC_INTERCEPTOR) {
+      Class<?> beanClass = event.getAnnotatedType().getJavaClass();
+      if (!beanClass.isInterface() && !Modifier.isAbstract(beanClass.getModifiers())
+          && !event.getAnnotatedType().isAnnotationPresent(Interceptor.class)) {
+        asyncBeanClass.add(beanClass);
+      }
+    }
+  }
+
   protected DefaultContextService produce(Instance<Object> instance, ContextServiceConfig cfg)
       throws NamingException {
     logger.fine(() -> String.format("Create context service %s with %s.", cfg.getName(), cfg));
@@ -233,6 +285,31 @@ public class ConcurrentExtension implements Extension {
       DefaultManagedScheduledExecutorService service, ManagedScheduledExecutorConfig cfg) {
     instance.select(ExecutorServiceManager.class).get().register(service);
     return service.getAdapter();
+  }
+
+  protected void validate(@Observes AfterDeploymentValidation adv, BeanManager bm) {
+    if (ENABLE_ASYNC_INTERCEPTOR && !asyncBeanClass.isEmpty()) {
+      for (Class<?> clazz : asyncBeanClass) {
+        Asynchronous clazzAsync = clazz.getAnnotation(Asynchronous.class);
+        for (Method m : clazz.getMethods()) {
+          if (Modifier.isPublic(m.getModifiers())) {
+            Asynchronous methodAsync =
+                defaultObject(m.getAnnotation(Asynchronous.class), clazzAsync);
+            if (methodAsync != null) {
+              if (!m.getReturnType().equals(Void.TYPE) && !Future.class.equals(m.getReturnType())) {
+                adv.addDeploymentProblem(new CorantRuntimeException(
+                    "The asynchronous method %s return type must be java.util.concurrent.Future or void!",
+                    m.getName()));
+              } else if (!executorConfigs.getAllNames().contains(methodAsync.executor())) {
+                adv.addDeploymentProblem(new CorantRuntimeException(
+                    "The asynchronous method %s executor not found!", m.getName()));
+              }
+              asyncConfigs.computeIfAbsent(methodAsync, AsynchronousConfig::new);
+            }
+          }
+        }
+      }
+    }
   }
 
   DefaultContextService createContextService(String name, Instance<Object> instance,

@@ -15,8 +15,7 @@ package org.corant.modules.security.shared;
 
 import java.io.Serializable;
 import java.util.Map;
-import org.corant.modules.security.Principal;
-import org.corant.shared.exception.NotSupportedException;
+import java.util.Objects;
 
 /**
  * corant-modules-security-shared
@@ -24,42 +23,57 @@ import org.corant.shared.exception.NotSupportedException;
  * @author bingo 上午10:41:08
  *
  */
-public class UserPrincipal extends SimplePrincipal {
+public class IdentifierPrincipal extends SimplePrincipal {
 
   private static final long serialVersionUID = -6975094126652298173L;
 
-  protected Serializable userId;
+  protected Serializable id;
 
-  public UserPrincipal(Serializable userId, String username) {
-    super(username);
-    this.userId = userId;
+  public IdentifierPrincipal(Serializable id, String name) {
+    super(name);
+    this.id = id;
   }
 
-  public UserPrincipal(Serializable userId, String username,
+  public IdentifierPrincipal(Serializable id, String name,
       Map<String, ? extends Serializable> properties) {
-    super(username, properties);
-    this.userId = userId;
+    super(name, properties);
+    this.id = id;
   }
 
-  protected UserPrincipal() {}
+  protected IdentifierPrincipal() {}
 
-  public Serializable getUserId() {
-    return userId;
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (!super.equals(obj)) {
+      return false;
+    }
+    if (getClass() != obj.getClass()) {
+      return false;
+    }
+    IdentifierPrincipal other = (IdentifierPrincipal) obj;
+    return Objects.equals(id, other.id);
   }
 
-  @SuppressWarnings("unchecked")
+  public Serializable getId() {
+    return id;
+  }
+
+  @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = super.hashCode();
+    return prime * result + Objects.hash(id);
+  }
+
   @Override
   public <T> T unwrap(Class<T> cls) {
-    if (Principal.class.isAssignableFrom(cls)) {
-      return (T) this;
+    if (IdentifierPrincipal.class.isAssignableFrom(cls)) {
+      return cls.cast(this);
     }
-    if (SimplePrincipal.class.isAssignableFrom(cls)) {
-      return (T) this;
-    }
-    if (UserPrincipal.class.isAssignableFrom(cls)) {
-      return (T) this;
-    }
-    throw new NotSupportedException("Can't unwrap %s", cls);
+    return super.unwrap(cls);
   }
 
 }

@@ -16,10 +16,13 @@ package org.corant.modules.security.shared;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Predicate;
 import org.corant.modules.security.Permission;
 import org.corant.modules.security.shared.util.StringPredicates;
-import org.corant.shared.exception.NotSupportedException;
 
 /**
  * corant-modules-security-shared
@@ -27,16 +30,26 @@ import org.corant.shared.exception.NotSupportedException;
  * @author bingo 下午4:33:46
  *
  */
-public class SimplePermission implements Permission {
+public class SimplePermission implements Permission, AttributeSet {
 
   private static final long serialVersionUID = 3701989330265355350L;
 
   protected String name;
+
   protected transient Predicate<String> predicate;
 
+  protected Map<String, ? extends Serializable> attributes = Collections.emptyMap();
+
   public SimplePermission(String name) {
+    this(name, null);
+  }
+
+  public SimplePermission(String name, Map<String, ? extends Serializable> attributes) {
     this.name = name;
     predicate = StringPredicates.predicateOf(name);
+    if (attributes != null) {
+      this.attributes = Collections.unmodifiableMap(attributes);
+    }
   }
 
   protected SimplePermission() {}
@@ -57,14 +70,12 @@ public class SimplePermission implements Permission {
       return false;
     }
     SimplePermission other = (SimplePermission) obj;
-    if (name == null) {
-      if (other.name != null) {
-        return false;
-      }
-    } else if (!name.equals(other.name)) {
-      return false;
-    }
-    return true;
+    return Objects.equals(attributes, other.attributes) && Objects.equals(name, other.name);
+  }
+
+  @Override
+  public Map<String, ? extends Serializable> getAttributes() {
+    return attributes;
   }
 
   public String getName() {
@@ -73,10 +84,7 @@ public class SimplePermission implements Permission {
 
   @Override
   public int hashCode() {
-    final int prime = 31;
-    int result = 1;
-    result = prime * result + (name == null ? 0 : name.hashCode());
-    return result;
+    return Objects.hash(attributes, name);
   }
 
   @Override
@@ -92,16 +100,12 @@ public class SimplePermission implements Permission {
     return "SimplePermission [name=" + name + "]";
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public <T> T unwrap(Class<T> cls) {
-    if (Permission.class.isAssignableFrom(cls)) {
-      return (T) this;
-    }
     if (SimplePermission.class.isAssignableFrom(cls)) {
-      return (T) this;
+      return cls.cast(this);
     }
-    throw new NotSupportedException("Can't unwrap %s", cls);
+    return Permission.super.unwrap(cls);
   }
 
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {

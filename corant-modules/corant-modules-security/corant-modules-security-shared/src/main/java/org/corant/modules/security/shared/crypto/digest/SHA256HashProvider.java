@@ -11,8 +11,28 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.corant.shared.resource;
+package org.corant.modules.security.shared.crypto.digest;
 
-public interface WrappedResource extends Resource {
-  <T> T unwrap(Class<T> cls);
+/**
+ * corant-modules-security-shared
+ *
+ * @author bingo 上午10:36:39
+ *
+ */
+public class SHA256HashProvider extends AbstractHashProvider {
+
+  public static final String ALGORITHM = "SHA-256";
+
+  public SHA256HashProvider() {
+    super(ALGORITHM, 27500);
+  }
+
+  public SHA256HashProvider(int iterations) {
+    super(ALGORITHM, iterations);
+  }
+
+  public SHA256HashProvider(int iterations, int saltBitSize) {
+    super(ALGORITHM, iterations, saltBitSize);
+  }
+
 }

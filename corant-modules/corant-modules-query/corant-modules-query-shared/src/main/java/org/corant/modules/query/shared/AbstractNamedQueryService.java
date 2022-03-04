@@ -14,6 +14,7 @@
 package org.corant.modules.query.shared;
 
 import static java.util.stream.Collectors.toList;
+import static org.corant.context.Beans.resolve;
 import static org.corant.shared.util.Assertions.shouldNotNull;
 import static org.corant.shared.util.Empties.isEmpty;
 import static org.corant.shared.util.Empties.isNotEmpty;
@@ -38,6 +39,7 @@ import org.corant.Corant;
 import org.corant.modules.query.NamedQuerier;
 import org.corant.modules.query.NamedQueryService;
 import org.corant.modules.query.Querier;
+import org.corant.modules.query.QueryObjectMapper;
 import org.corant.modules.query.QueryParameter;
 import org.corant.modules.query.QueryParameter.StreamQueryParameter;
 import org.corant.modules.query.QueryRuntimeException;
@@ -45,6 +47,7 @@ import org.corant.modules.query.mapping.FetchQuery;
 import org.corant.modules.query.mapping.FetchQuery.FetchQueryParameterSource;
 import org.corant.modules.query.mapping.Query.QueryType;
 import org.corant.modules.query.shared.dynamic.DynamicQuerier;
+import org.corant.shared.retry.RetryStrategy.MaxAttemptsRetryStrategy;
 import org.corant.shared.ubiquity.Tuple.Pair;
 import org.corant.shared.util.Retry;
 
@@ -79,6 +82,11 @@ public abstract class AbstractNamedQueryService implements NamedQueryService {
       throw new QueryRuntimeException(e, "An error occurred while executing the get query [%s]!",
           q);
     }
+  }
+
+  @Override
+  public QueryObjectMapper getObjectMapper() {
+    return resolve(QueryObjectMapper.class);
   }
 
   /**
@@ -182,9 +190,11 @@ public abstract class AbstractNamedQueryService implements NamedQueryService {
 
       private Forwarding<T> doForward(String queryName, StreamQueryParameter parameter) {
         if (parameter.needRetry()) {
-          return Retry.retryer().times(parameter.getRetryTimes())
-              .interval(parameter.getRetryInterval())
-              .breaker(() -> Corant.current() != null && Corant.current().isRunning())
+          return Retry.synchronousRetryer()
+              .retryStrategy(
+                  new MaxAttemptsRetryStrategy(parameter.getRetryTimes() + 1))
+              .backoffStrategy(parameter.getRetryBackoffStrategy())
+              .retryPrecondition(c -> Corant.current() != null && Corant.current().isRunning())
               .execute(() -> forward(queryName, parameter));
         } else {
           return forward(queryName, parameter);

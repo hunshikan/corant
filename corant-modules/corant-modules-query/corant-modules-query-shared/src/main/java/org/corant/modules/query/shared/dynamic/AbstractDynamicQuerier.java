@@ -20,6 +20,7 @@ import static org.corant.shared.util.Objects.defaultObject;
 import static org.corant.shared.util.Objects.forceCast;
 import static org.corant.shared.util.Objects.max;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -85,12 +86,12 @@ public abstract class AbstractDynamicQuerier<P, S> implements DynamicQuerier<P, 
 
   @Override
   public void handleFetchedResult(Object result, List<?> fetchResult, FetchQuery fetchQuery) {
-    fetchQueryHandler.handleFetchedResult(result, fetchResult, fetchQuery);
+    fetchQueryHandler.handleFetchedResult(queryParameter, result, fetchResult, fetchQuery);
   }
 
   @Override
   public void handleFetchedResults(List<?> results, List<?> fetchResult, FetchQuery fetchQuery) {
-    fetchQueryHandler.handleFetchedResults(results, fetchResult, fetchQuery);
+    fetchQueryHandler.handleFetchedResults(queryParameter, results, fetchResult, fetchQuery);
   }
 
   @Override
@@ -132,8 +133,8 @@ public abstract class AbstractDynamicQuerier<P, S> implements DynamicQuerier<P, 
             "The size of query[%s] result is exceeded, the allowable range is %s, the excess records are silently dropped.",
             query.getName(), maxSize));
         do {
-          results.remove(size - 1);
-        } while ((size = sizeOf(results)) > maxSize);
+          results.remove(--size);
+        } while (size > maxSize);
       }
     }
     return size;
@@ -167,13 +168,22 @@ public abstract class AbstractDynamicQuerier<P, S> implements DynamicQuerier<P, 
   }
 
   @Override
+  public int resolveMaxFetchSize(Object parentResult, FetchQuery fetchQuery) {
+    int maxFetchSize = fetchQuery.getMaxSize();
+    if (maxFetchSize > 0 && parentResult instanceof Collection) {
+      maxFetchSize = maxFetchSize * ((Collection<?>) parentResult).size();
+    }
+    return maxFetchSize;
+  }
+
+  @Override
   public int resolveMaxSelectSize() {
     if (maxSelectSize == null) {
       synchronized (this) {
         if (maxSelectSize == null
             && (maxSelectSize = resolveProperty(QuerierConfig.PRO_KEY_MAX_SELECT_SIZE,
                 Integer.class, config.getDefaultSelectSize())) <= 0) {
-          maxSelectSize = config.getMaxSelectSize();
+          maxSelectSize = max(config.getMaxSelectSize(), 0);
         }
       }
     }

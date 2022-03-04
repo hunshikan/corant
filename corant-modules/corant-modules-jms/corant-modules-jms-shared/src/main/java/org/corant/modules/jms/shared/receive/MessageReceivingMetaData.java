@@ -35,8 +35,8 @@ import org.corant.modules.jms.metadata.MessageDestinationMetaData;
 import org.corant.modules.jms.metadata.MessageDrivenMetaData;
 import org.corant.modules.jms.metadata.MessageReplyMetaData;
 import org.corant.shared.exception.CorantRuntimeException;
-import org.corant.shared.util.Retry.BackoffAlgorithm;
-import org.corant.shared.util.Retry.RetryInterval;
+import org.corant.shared.retry.BackoffStrategy;
+import org.corant.shared.retry.BackoffStrategy.BackoffStrategyBuilder;
 
 /**
  * corant-modules-jms-shared
@@ -60,7 +60,7 @@ public class MessageReceivingMetaData {
   private final int receiveThreshold;
   private final int failureThreshold;
   private final int tryThreshold;
-  private final RetryInterval brokenInterval;
+  private final BackoffStrategy brokenBackoffStrategy;
   private final long loopIntervalMs;
   private final boolean xa;
   private final int txTimeout;
@@ -87,21 +87,10 @@ public class MessageReceivingMetaData {
     String maxBds = driven.getMaxBrokenDuration();
     Duration brokenDuration =
         max(isBlank(bds) ? Duration.ofMinutes(15) : Duration.parse(bds), Duration.ofSeconds(1L));
-    if (driven.getBrokenBackoffAlgo() == BackoffAlgorithm.NONE) {
-      brokenInterval = RetryInterval.noBackoff(brokenDuration);
-    } else if (driven.getBrokenBackoffAlgo() == BackoffAlgorithm.EXPO) {
-      brokenInterval = RetryInterval.expoBackoff(brokenDuration, Duration.parse(maxBds),
-          driven.getBrokenBackoffFactor());
-    } else if (driven.getBrokenBackoffAlgo() == BackoffAlgorithm.EXPO_DECORR) {
-      brokenInterval = RetryInterval.expoBackoffDecorr(brokenDuration, Duration.parse(maxBds),
-          driven.getBrokenBackoffFactor());
-    } else if (driven.getBrokenBackoffAlgo() == BackoffAlgorithm.EXPO_EQUAL_JITTER) {
-      brokenInterval = RetryInterval.expoBackoffEqualJitter(brokenDuration, Duration.parse(maxBds),
-          driven.getBrokenBackoffFactor());
-    } else {
-      brokenInterval = RetryInterval.expoBackoffFullJitter(brokenDuration, Duration.parse(maxBds),
-          driven.getBrokenBackoffFactor());
-    }
+    Duration maxBrokenDuration = isBlank(maxBds) ? brokenDuration : Duration.parse(maxBds);
+    brokenBackoffStrategy = new BackoffStrategyBuilder().algorithm(driven.getBrokenBackoffAlgo())
+        .baseDuration(brokenDuration).maxDuration(maxBrokenDuration)
+        .factor(driven.getBrokenBackoffFactor()).build();
     xa = driven.isXa();
     txTimeout = driven.getTxTimeout();
     replies = driven.getReply();
@@ -118,12 +107,10 @@ public class MessageReceivingMetaData {
       shouldBeFalse(method.getMethod().getReturnType().equals(Void.TYPE),
           "The message receiving method %s requires a return type because the method is configured with a reply.",
           method.getMethod());
-    } else {
-      if (!method.getMethod().getReturnType().equals(Void.TYPE)) {
-        logger.warning(() -> String.format(
-            "The message receiving method %s has a return type, but the method is configured without a reply.",
-            method.getMethod()));
-      }
+    } else if (!method.getMethod().getReturnType().equals(Void.TYPE)) {
+      logger.warning(() -> String.format(
+          "The message receiving method %s has a return type, but the method is configured without a reply.",
+          method.getMethod()));
     }
   }
 
@@ -200,8 +187,8 @@ public class MessageReceivingMetaData {
     return acknowledge;
   }
 
-  public RetryInterval getBrokenInterval() {
-    return brokenInterval;
+  public BackoffStrategy getBrokenBackoffStrategy() {
+    return brokenBackoffStrategy;
   }
 
   public int getCacheLevel() {
@@ -263,8 +250,7 @@ public class MessageReceivingMetaData {
     result = prime * result + (connectionFactoryId == null ? 0 : connectionFactoryId.hashCode());
     result = prime * result + (destination == null ? 0 : destination.hashCode());
     result = prime * result + (multicast ? 1231 : 1237);
-    result = prime * result + (selector == null ? 0 : selector.hashCode());
-    return result;
+    return prime * result + (selector == null ? 0 : selector.hashCode());
   }
 
   public boolean isMulticast() {

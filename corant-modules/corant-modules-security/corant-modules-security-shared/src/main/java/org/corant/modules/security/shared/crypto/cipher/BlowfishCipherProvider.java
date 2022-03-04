@@ -29,11 +29,7 @@ public class BlowfishCipherProvider extends SymmetricCipherProvider {
   public static final int IV_BIT_SIZE = 0;
 
   public BlowfishCipherProvider(byte[] key) {
-    this(null, key);
-  }
-
-  public BlowfishCipherProvider(String provider, byte[] key) {
-    super(ALGORITHM, provider, key, IV_BIT_SIZE);
+    super(ALGORITHM, key, IV_BIT_SIZE);
   }
 
   @Override

@@ -26,7 +26,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
-import org.corant.shared.util.Retry.RetryInterval;
+import org.corant.shared.retry.BackoffStrategy;
+import org.corant.shared.retry.BackoffStrategy.FixedBackoffStrategy;
 
 /**
  * corant-modules-query-api
@@ -39,6 +40,11 @@ public interface QueryParameter extends Serializable {
   String OFFSET_PARAM_NME = "_offset";
   String LIMIT_PARAM_NME = "_limit";
   String CONTEXT_NME = "_context";
+
+  // Use to manual adjust the query execution, can be set in the context
+  String CTX_QHH_EXCLUDE_FETCH_QUERY = "__QHH_EXCLUDE_FETCH_QUERY";
+  String CTX_QHH_EXCLUDE_RESULTHINT = "__QHH_EXCLUDE_RESULT_HINT";
+  String CTX_QHH_DONT_CONVERT_RESULT = "__QHH_DONT_CONVERT_RESULT";
 
   /**
    * Return the query context that may be contain current user context or security context.
@@ -100,7 +106,7 @@ public interface QueryParameter extends Serializable {
     private static final long serialVersionUID = 6618232487063961660L;
 
     protected Object criteria;
-    protected Integer limit = 1;
+    protected Integer limit;
     protected Integer offset = 0;
     protected Map<String, Object> context = new HashMap<>();
 
@@ -210,7 +216,7 @@ public interface QueryParameter extends Serializable {
 
     @Override
     public GenericQueryParameter<T> offset(Integer offset) {
-      super.offset(limit);
+      super.offset(offset);
       return this;
     }
 
@@ -256,7 +262,7 @@ public interface QueryParameter extends Serializable {
 
     protected int retryTimes = 0;
 
-    protected RetryInterval retryInterval = RetryInterval.noBackoff(defRtyItl);
+    protected BackoffStrategy retryBackoffStrategy = new FixedBackoffStrategy(defRtyItl);
 
     protected transient BiPredicate<Integer, Object> terminater;
 
@@ -270,8 +276,8 @@ public interface QueryParameter extends Serializable {
 
     public StreamQueryParameter(StreamQueryParameter other) {
       super(other);
-      enhancer(other.enhancer).retryInterval(other.retryInterval).retryTimes(other.retryTimes)
-          .retryInterval(other.retryInterval).terminater(other.terminater);
+      enhancer(other.enhancer).retryBackoffStrategy(other.retryBackoffStrategy)
+          .retryTimes(other.retryTimes).terminater(other.terminater);
     }
 
     @Override
@@ -301,7 +307,7 @@ public interface QueryParameter extends Serializable {
       if (enhancer != null) {
         enhancer.accept(current, this);
       } else {
-        offset(offset + super.getLimit());
+        offset(offset + getLimit());
       }
       return this;
     }
@@ -310,13 +316,16 @@ public interface QueryParameter extends Serializable {
       return enhancer;
     }
 
+    @Override
+    public Integer getLimit() {
+      return defaultObject(super.getLimit(), 1);
+    }
+
     /**
-     * @see #retryInterval(RetryInterval)
-     *
-     * @return getRetryInterval
+     * @see #retryBackoffStrategy(BackoffStrategy)
      */
-    public RetryInterval getRetryInterval() {
-      return retryInterval;
+    public BackoffStrategy getRetryBackoffStrategy() {
+      return retryBackoffStrategy;
     }
 
     /**
@@ -366,14 +375,15 @@ public interface QueryParameter extends Serializable {
     /**
      * The stream query may be use {@link QueryService#forward(Object, Object)} to fetch data in
      * batches, in this process the exception may be occurred, the query may retry after exception
-     * occurred, this method use to set the retry interval. The underly query service implemention
-     * may not support
+     * occurred, this method use to set the retry back-off strategy. The underly query service
+     * implementation may not support
      *
-     * @param retryInterval the retry interval, if given is null, the default interval is 2 seconds.
+     * @param retryBackoffStrategy the retry back-off strategy, if given is null, the default
+     *        interval is 2 seconds.
      */
-    public StreamQueryParameter retryInterval(RetryInterval retryInterval) {
-      this.retryInterval =
-          defaultObject(retryInterval, RetryInterval.noBackoff(Duration.ofMillis(2000L)));
+    public StreamQueryParameter retryBackoffStrategy(BackoffStrategy retryBackoffStrategy) {
+      this.retryBackoffStrategy = defaultObject(retryBackoffStrategy,
+          () -> new FixedBackoffStrategy(Duration.ofSeconds(2L)));
       return this;
     }
 
@@ -415,6 +425,7 @@ public interface QueryParameter extends Serializable {
       this.terminater = terminater;
       return this;
     }
+
   }
 
 }

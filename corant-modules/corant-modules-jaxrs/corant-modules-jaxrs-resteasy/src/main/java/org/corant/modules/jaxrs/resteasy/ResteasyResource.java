@@ -17,7 +17,6 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.unmodifiableMap;
 import static javax.ws.rs.core.HttpHeaders.CONTENT_DISPOSITION;
-import static javax.ws.rs.core.HttpHeaders.CONTENT_TYPE;
 import static org.corant.modules.servlet.ContentDispositions.parse;
 import static org.corant.shared.util.Assertions.shouldNotNull;
 import static org.corant.shared.util.Empties.isEmpty;
@@ -35,8 +34,8 @@ import org.apache.james.mime4j.codec.DecodeMonitor;
 import org.apache.james.mime4j.codec.DecoderUtil;
 import org.corant.modules.jaxrs.shared.AbstractJaxrsResource;
 import org.corant.modules.servlet.ContentDispositions.ContentDisposition;
+import org.corant.shared.resource.Resource;
 import org.corant.shared.resource.SourceType;
-import org.corant.shared.resource.WrappedResource;
 import org.jboss.resteasy.plugins.providers.multipart.InputPart;
 
 /**
@@ -95,7 +94,7 @@ public class ResteasyResource extends AbstractJaxrsResource {
    * @date 2019-09-26
    *
    */
-  public static class InputPartResource implements WrappedResource {
+  public static class InputPartResource implements Resource {
 
     protected InputPart inputPart;
 
@@ -120,9 +119,17 @@ public class ResteasyResource extends AbstractJaxrsResource {
           filename = new String(filename.getBytes(ISO_8859_1), UTF_8);
         }
       }
-      this.filename = defaultObject(filename, () -> "unnamed-" + UUID.randomUUID());
       metaData = new HashMap<>();
-      metaData.put(CONTENT_TYPE, getContentType());
+      this.filename = defaultObject(filename, () -> "unnamed-" + UUID.randomUUID());
+      metaData.put(META_NAME, this.filename);
+      if (inputPart.getMediaType() != null) {
+        metaData.put(META_CONTENT_TYPE, inputPart.getMediaType().toString());
+      }
+      if (disposition.getModificationDate() != null) {
+        metaData.put(META_LAST_MODIFIED,
+            disposition.getModificationDate().toInstant().toEpochMilli());
+      }
+      metaData.put(META_CONTENT_LENGTH, disposition.getSize());
     }
 
     public void addMetadata(String key, Object value) {
@@ -131,6 +138,10 @@ public class ResteasyResource extends AbstractJaxrsResource {
 
     public String getContentType() {
       return inputPart.getMediaType().toString();
+    }
+
+    public InputPart getInputPart() {
+      return inputPart;
     }
 
     @Override
@@ -158,13 +169,12 @@ public class ResteasyResource extends AbstractJaxrsResource {
       return inputPart.getBody(InputStream.class, null);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T> T unwrap(Class<T> cls) {
-      if (InputPart.class.isAssignableFrom(cls)) {
-        return (T) inputPart;
+      if (InputPartResource.class.isAssignableFrom(cls)) {
+        return cls.cast(this);
       }
-      throw new IllegalArgumentException("Can't unwrap resource to " + cls);
+      return Resource.super.unwrap(cls);
     }
 
   }

@@ -122,7 +122,8 @@ public interface PathMatcher extends Predicate<String> {
       return express;
     }
     int idx = -1;
-    for (int i = 0; i < express.length(); i++) {
+    int expressLen = express.length();
+    for (int i = 0; i < expressLen; i++) {
       char c = express.charAt(i);
       if (patternChars.indexOf(c) != -1) {
         idx = i;
@@ -266,8 +267,7 @@ public interface PathMatcher extends Predicate<String> {
       int result = 1;
       result = prime * result + (globExpress == null ? 0 : globExpress.hashCode());
       result = prime * result + (ignoreCase ? 1231 : 1237);
-      result = prime * result + (isDos ? 1231 : 1237);
-      return result;
+      return prime * result + (isDos ? 1231 : 1237);
     }
 
     public boolean isDos() {
@@ -413,13 +413,11 @@ public interface PathMatcher extends Predicate<String> {
         } else {
           return Pattern.compile(toWindowsRegexPattern(globExpress), Pattern.UNICODE_CASE);
         }
+      } else if (ignoreCase) {
+        return Pattern.compile(toUnixRegexPattern(globExpress),
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
       } else {
-        if (ignoreCase) {
-          return Pattern.compile(toUnixRegexPattern(globExpress),
-              Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-        } else {
-          return Pattern.compile(toUnixRegexPattern(globExpress), Pattern.UNICODE_CASE);
-        }
+        return Pattern.compile(toUnixRegexPattern(globExpress), Pattern.UNICODE_CASE);
       }
     }
 
@@ -464,12 +462,13 @@ public interface PathMatcher extends Predicate<String> {
       StringBuilder regex = new StringBuilder("^");
 
       int i = 0;
-      while (i < globPattern.length()) {
+      int len = globPattern.length();
+      while (i < len) {
         char c = globPattern.charAt(i++);
         switch (c) {
           case '\\':
             // escape special characters
-            if (i == globPattern.length()) {
+            if (i == len) {
               throw new PatternSyntaxException("No character to escape", globPattern, i - 1);
             }
             char next = globPattern.charAt(i++);
@@ -510,7 +509,7 @@ public interface PathMatcher extends Predicate<String> {
             }
             boolean hasRangeStart = false;
             char last = 0;
-            while (i < globPattern.length()) {
+            while (i < len) {
               c = globPattern.charAt(i++);
               if (c == ']') {
                 break;
@@ -575,13 +574,11 @@ public interface PathMatcher extends Predicate<String> {
               // crosses directory boundaries
               regex.append(".*");
               i++;
+            } else // within directory boundary
+            if (isDos) {
+              regex.append("[^\\\\]*");
             } else {
-              // within directory boundary
-              if (isDos) {
-                regex.append("[^\\\\]*");
-              } else {
-                regex.append("[^/]*");
-              }
+              regex.append("[^/]*");
             }
             break;
           case '?':

@@ -140,7 +140,7 @@ public class Methods {
   }
 
   /**
-   * Code base from from apache.org
+   * Code base from apache.org
    * <p>
    * Returns the aggregate number of inheritance hops between assignable argument class types.
    * Returns -1 if the arguments aren't assignable. Fills a specific purpose for getMatchingMethod
@@ -344,8 +344,7 @@ public class Methods {
       final int prime = 31;
       int result = 1;
       result = prime * result + methodName.hashCode();
-      result = prime * result + Arrays.hashCode(parameterTypes);
-      return result;
+      return prime * result + Arrays.hashCode(parameterTypes);
     }
 
     public boolean matches(Method method) {

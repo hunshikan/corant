@@ -13,7 +13,7 @@
  */
 package org.corant.config;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import org.eclipse.microprofile.config.spi.ConfigSource;
@@ -41,6 +41,10 @@ public class CorantConfigSource implements ConfigSource, AutoCloseable {
     }
   }
 
+  public ConfigSource getDelegate() {
+    return delegate;
+  }
+
   @Override
   public String getName() {
     return delegate.getName();
@@ -53,7 +57,7 @@ public class CorantConfigSource implements ConfigSource, AutoCloseable {
 
   @Override
   public Map<String, String> getProperties() {
-    return new HashMap<>(delegate.getProperties());
+    return Collections.unmodifiableMap(delegate.getProperties());
   }
 
   @Override
@@ -70,10 +74,12 @@ public class CorantConfigSource implements ConfigSource, AutoCloseable {
     return delegate.getValue(propertyName);
   }
 
-  @SuppressWarnings("unchecked")
   public <T extends ConfigSource> T unwrap(Class<T> type) {
-    if (delegate.getClass().isAssignableFrom(type)) {
-      return (T) delegate;
+    if (CorantConfigSource.class.isAssignableFrom(type)) {
+      return type.cast(this);
+    }
+    if (ConfigSource.class.isAssignableFrom(type)) {
+      return type.cast(this);
     }
     throw new IllegalArgumentException("Can't unwrap ConfigSource to " + type);
   }

@@ -17,6 +17,7 @@ import static org.corant.context.Beans.resolve;
 import static org.corant.shared.util.Assertions.shouldNotBlank;
 import static org.corant.shared.util.Assertions.shouldNotNull;
 import static org.corant.shared.util.Maps.mapOf;
+import static org.corant.shared.util.Objects.defaultObject;
 import java.lang.annotation.Annotation;
 import java.time.Duration;
 import java.util.List;
@@ -30,7 +31,8 @@ import org.corant.modules.query.QueryObjectMapper;
 import org.corant.modules.query.QueryParameter.StreamQueryParameter;
 import org.corant.modules.query.QueryService;
 import org.corant.modules.query.mapping.Query.QueryType;
-import org.corant.shared.util.Retry.RetryInterval;
+import org.corant.shared.retry.BackoffStrategy;
+import org.corant.shared.retry.BackoffStrategy.FixedBackoffStrategy;
 import org.corant.shared.util.Streams;
 
 /**
@@ -113,11 +115,11 @@ public class StreamNamedQueryServices {
   }
 
   public <T> Stream<List<T>> batch() {
-    return Streams.batchStream(parameter.getLimit(), stream());
+    return Streams.batchStream(defaultObject(parameter.getLimit(), 16), stream());
   }
 
   public <T> Stream<List<T>> batchAs(Class<T> cls) {
-    return Streams.batchStream(parameter.getLimit(), streamAs(cls));
+    return Streams.batchStream(defaultObject(parameter.getLimit(), 16), streamAs(cls));
   }
 
   public StreamNamedQueryServices context(Map<String, Object> context) {
@@ -180,19 +182,18 @@ public class StreamNamedQueryServices {
     return this;
   }
 
-  /**
-   * No backoff interval
-   *
-   * @param retryInterval
-   * @return retryInterval
-   */
-  public StreamNamedQueryServices retryInterval(Duration retryInterval) {
-    parameter.retryInterval(RetryInterval.noBackoff(retryInterval));
+  public StreamNamedQueryServices retryBackoffStrategy(BackoffStrategy backoffStrategy) {
+    parameter.retryBackoffStrategy(backoffStrategy);
     return this;
   }
 
-  public StreamNamedQueryServices retryInterval(RetryInterval retryInterval) {
-    parameter.retryInterval(retryInterval);
+  /**
+   * Fixed back-off strategy
+   *
+   * @param duration
+   */
+  public StreamNamedQueryServices retryBackoffStrategy(Duration duration) {
+    parameter.retryBackoffStrategy(new FixedBackoffStrategy(duration));
     return this;
   }
 

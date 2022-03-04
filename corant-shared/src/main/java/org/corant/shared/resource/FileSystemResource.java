@@ -103,10 +103,9 @@ public class FileSystemResource extends URLResource implements WritableResource 
 
   @Override
   public Map<String, Object> getMetadata() {
-    return immutableMapOf("location", getLocation(), "sourceType", SourceType.FILE_SYSTEM.name(),
-        "path", file.getPath(), "fileName", getName(), META_LAST_MODIFIED, file.lastModified(),
-        META_CONTENT_LENGTH, file.length(), META_CONTENT_TYPE,
-        FileUtils.getContentType(getLocation()));
+    return immutableMapOf(META_SOURCE_TYPE, SourceType.FILE_SYSTEM.name(), META_NAME, getName(),
+        META_LAST_MODIFIED, file.lastModified(), META_CONTENT_LENGTH, file.length(),
+        META_CONTENT_TYPE, FileUtils.getContentType(getLocation()));
   }
 
   @Override
@@ -118,8 +117,7 @@ public class FileSystemResource extends URLResource implements WritableResource 
   public int hashCode() {
     final int prime = 31;
     int result = super.hashCode();
-    result = prime * result + (file == null ? 0 : file.hashCode());
-    return result;
+    return prime * result + (file == null ? 0 : file.hashCode());
   }
 
   @Override
@@ -142,15 +140,11 @@ public class FileSystemResource extends URLResource implements WritableResource 
     return FileChannel.open(file.toPath(), StandardOpenOption.WRITE);
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public <T> T unwrap(Class<T> cls) {
-    if (URLResource.class.isAssignableFrom(cls)) {
-      return (T) this;
-    }
     if (FileSystemResource.class.isAssignableFrom(cls)) {
-      return (T) this;
+      return cls.cast(this);
     }
-    throw new IllegalArgumentException("Can't unwrap resource to " + cls);
+    return super.unwrap(cls);
   }
 }

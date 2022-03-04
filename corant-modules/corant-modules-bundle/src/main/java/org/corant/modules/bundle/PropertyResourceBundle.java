@@ -21,8 +21,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -35,6 +33,7 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import org.corant.shared.normal.Defaults;
 import org.corant.shared.resource.Resource;
 import org.corant.shared.resource.URLResource;
@@ -56,20 +55,20 @@ public class PropertyResourceBundle extends ResourceBundle implements Sortable {
 
   public static final char LOCALE_SPT_CHAR = '_';
 
-  private static Logger logger = Logger.getLogger(PropertyResourceBundle.class.getName());
+  private static final Logger logger = Logger.getLogger(PropertyResourceBundle.class.getName());
 
-  private Map<String, Object> lookup;
+  private final Map<String, Object> lookup;
 
-  private long lastModifiedTime;
+  private final long lastModifiedTime;
 
-  private Locale locale;
+  private final Locale locale;
 
-  private String baseBundleName;
+  private final String baseBundleName;
 
-  private String uri;
+  private final String uri;
 
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  public PropertyResourceBundle(Resource fo) throws IOException {
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public PropertyResourceBundle(Resource fo) {
     uri = fo instanceof URLResource ? ((URLResource) fo).getURI().toString() : fo.getName();
     baseBundleName = fo.getName();
     locale = PropertyResourceBundle.detectLocaleByName(baseBundleName);
@@ -78,28 +77,23 @@ public class PropertyResourceBundle extends ResourceBundle implements Sortable {
     try (InputStream is = fo.openInputStream();
         InputStreamReader isr = new InputStreamReader(is, Defaults.DFLT_CHARSET)) {
       properties.load(isr);
+    } catch (IOException e) {
+      throw new NoSuchBundleException(e, "Can not load property resource bundle %s.", uri);
     }
     logger.fine(() -> String.format("Load property resource from %s.", fo.getLocation()));
     lookup = new HashMap(properties);
   }
 
   public static List<PropertyResourceBundle> getBundles(String path, Predicate<Resource> fs) {
-    List<PropertyResourceBundle> list = new ArrayList<>();
     try {
-      Resources.from(path).filter(fs).forEach(fo -> {
-        try {
-          list.add(new PropertyResourceBundle(fo));
-        } catch (IOException e) {
-          throw new NoSuchBundleException(e, "Can not load property resource bundle %s.",
-              fo.getURL().getPath());
-        }
-      });
+      List<PropertyResourceBundle> list = Resources.from(path).filter(fs).parallel()
+          .map(PropertyResourceBundle::new).collect(Collectors.toList());
+      list.sort(Sortable::compare);
+      return list;
     } catch (IOException e) {
       throw new NoSuchBundleException(e, "Can not load property resource bundles from paths %s.",
           path);
     }
-    Collections.sort(list, Sortable::compare);
-    return list;
   }
 
   protected static Locale detectLocaleByName(String name) {
@@ -170,7 +164,7 @@ public class PropertyResourceBundle extends ResourceBundle implements Sortable {
     /**
      * Constructs a resource bundle enumeration.
      *
-     * @param set an set providing some elements of the enumeration
+     * @param set a set providing some elements of the enumeration
      * @param enumeration an enumeration providing more elements of the enumeration. enumeration may
      *        be null.
      */

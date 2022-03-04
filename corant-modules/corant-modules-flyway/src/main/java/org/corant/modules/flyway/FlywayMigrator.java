@@ -42,6 +42,7 @@ import org.corant.modules.flyway.FlywayConfigProvider.DefaultFlywayConfigProvide
 import org.corant.shared.exception.CorantRuntimeException;
 import org.corant.shared.util.Objects;
 import org.corant.shared.util.Resources;
+import org.corant.shared.util.StopWatch;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.callback.Callback;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
@@ -87,12 +88,14 @@ public class FlywayMigrator {
   // @Transactional // FIXME use JTA XA, the flyway migration schema history will be rollback
   public void migrate() {
     if (globalFlywayConfig.isEnable()) {
-      logger.info(() -> "Perform migrate process if necessary...");
+      StopWatch sw = StopWatch.press("Flyway migration");
+      logger.info(() -> "Perform migration process if necessary...");
       getConfigProviders().map(this::build).filter(Objects::isNotNull).forEach(this::doMigrate);
-      logger.info(() -> "Finished migrate process.");
+      logger.info(() -> "Finished migration process.");
+      sw.destroy(logger);
     } else {
       logger.fine(() -> String.format(
-          "Disable migrate process, If you want to migrate, set %s in the configuration file!",
+          "Disable migration process, If you want to migrate, set %s in the configuration file!",
           "corant.flyway.migrate.enable=true"));
     }
   }
@@ -120,7 +123,7 @@ public class FlywayMigrator {
       logger.info(() -> String.format("Build flyway instance from locations [%s]",
           String.join(",", locationsToUse)));
       FluentConfiguration fc = Flyway.configure().configuration(globalFlywayConfig).dataSource(ds)
-          .cleanDisabled(true).locations(locationsToUse.toArray(new String[locationsToUse.size()]));
+          .cleanDisabled(true).locations(locationsToUse.toArray(new String[0]));
       if (!callbacks.isUnsatisfied()) {
         fc.callbacks(callbacks.stream().toArray(Callback[]::new));
       }

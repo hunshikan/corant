@@ -19,11 +19,12 @@ import java.lang.annotation.Documented;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import javax.enterprise.util.AnnotationLiteral;
 
 /**
  * corant-config
  *
- * Use to indicates the beginning of the namespace of the configuration item.
+ * Use to indicate the beginning of the namespace of the configuration item.
  * <p>
  * For example:
  *
@@ -69,4 +70,35 @@ public @interface ConfigKeyRoot {
   int keyIndex() default -1;
 
   String value();
+
+  class ConfigKeyRootLiteral extends AnnotationLiteral<ConfigKeyRoot> implements ConfigKeyRoot {
+
+    private static final long serialVersionUID = 4676760366128922922L;
+
+    final boolean ignoreNoAnnotatedItem;
+    final int keyIndex;
+    final String value;
+
+    public ConfigKeyRootLiteral(boolean ignoreNoAnnotatedItem, int keyIndex, String value) {
+      this.ignoreNoAnnotatedItem = ignoreNoAnnotatedItem;
+      this.keyIndex = keyIndex;
+      this.value = value;
+    }
+
+    @Override
+    public boolean ignoreNoAnnotatedItem() {
+      return ignoreNoAnnotatedItem;
+    }
+
+    @Override
+    public int keyIndex() {
+      return keyIndex;
+    }
+
+    @Override
+    public String value() {
+      return value;
+    }
+
+  }
 }

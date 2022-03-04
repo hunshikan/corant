@@ -43,15 +43,15 @@ public abstract class AbstractSqlNamedQueryService extends AbstractNamedQuerySer
   public FetchResult fetch(Object result, FetchQuery fetchQuery, Querier parentQuerier) {
     try {
       QueryParameter fetchParam = parentQuerier.resolveFetchQueryParameter(result, fetchQuery);
-      int maxSize = fetchQuery.getMaxSize();
       String refQueryName = fetchQuery.getReferenceQuery().getVersionedName();
       SqlNamedQuerier querier = getQuerierResolver().resolve(refQueryName, fetchParam);
+      int maxFetchSize = querier.resolveMaxFetchSize(result, fetchQuery);
       String sql = querier.getScript();
       Duration timeout = querier.resolveTimeout();
       Object[] scriptParameter = querier.getScriptParameter();
       log("fetch-> " + refQueryName, scriptParameter, sql);
       return new FetchResult(fetchQuery, querier,
-          getExecutor().select(sql, maxSize, timeout, scriptParameter));
+          getExecutor().select(sql, maxFetchSize, timeout, scriptParameter));
     } catch (SQLException e) {
       throw new QueryRuntimeException(e,
           "An error occurred while executing the fetch query [%s], exception [%s].",

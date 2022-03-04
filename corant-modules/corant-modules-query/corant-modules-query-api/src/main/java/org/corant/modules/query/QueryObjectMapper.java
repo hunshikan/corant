@@ -14,9 +14,11 @@
 package org.corant.modules.query;
 
 import static org.corant.shared.util.Objects.forceCast;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.corant.shared.ubiquity.TypeLiteral;
 
 /**
  * corant-modules-query-api
@@ -31,6 +33,17 @@ import java.util.Map;
 public interface QueryObjectMapper {
 
   /**
+   * Copy an object
+   *
+   * @param <T> the object type
+   * @param object the object to be copyed
+   * @param type the object type
+   */
+  default <T> T copy(T object, TypeLiteral<T> type) {
+    return object;
+  }
+
+  /**
    * Deserialize JSON content from given JSON content String and expected type.
    *
    * @param <T> the expected type
@@ -39,6 +52,14 @@ public interface QueryObjectMapper {
    * @return the object
    */
   <T> T fromJsonString(String jsonString, Class<T> type);
+
+  /**
+   * From the object of the given map struct, get the corresponding value through the given key.
+   *
+   * @param object the map struct object
+   * @param key the key
+   */
+  Object getMappedValue(Object object, Object key);
 
   /**
    * Since the query processing process requires free extraction and conversion, a large number of
@@ -53,6 +74,15 @@ public interface QueryObjectMapper {
   Map<String, Object> mapOf(Object object, boolean convert);
 
   /**
+   * Inject the given object into the given map struct object through the given key
+   *
+   * @param object the map struct object which to inject
+   * @param key the key
+   * @param value the value to be injected
+   */
+  void putMappedValue(Object object, Object key, Object value);
+
+  /**
    * Serialize given object to JSON strings.
    *
    * @param object the object
@@ -65,22 +95,22 @@ public interface QueryObjectMapper {
   /**
    * Convert the given object to expected typed object.
    *
-   * @param <T> the expected type
+   * @param <T> the expected type class
    * @param from the object to be converted
-   * @param type the expected class
+   * @param type the expected type
    * @return the converted object
    */
-  <T> T toObject(Object from, Class<T> type);
+  <T> T toObject(Object from, Type type);
 
   /**
    * Convert the given objects list to expected typed objects list.
    *
-   * @param <T> the expected type
+   * @param <T> the expected type class
    * @param from the objects list to be converted
-   * @param type the expected class
+   * @param type the expected type
    * @return the converted objects list
    */
-  default <T> List<T> toObjects(List<Object> from, Class<T> type) {
+  default <T> List<T> toObjects(List<Object> from, Type type) {
     if (from == null) {
       return new ArrayList<>();
     }

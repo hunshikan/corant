@@ -13,29 +13,18 @@
  */
 package org.corant.modules.query.shared;
 
-import static org.corant.shared.util.Assertions.shouldNotBlank;
-import static org.corant.shared.util.Assertions.shouldNotNull;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.logging.Logger;
-import javax.script.Bindings;
-import javax.script.Compilable;
-import javax.script.CompiledScript;
-import javax.script.ScriptException;
-import javax.script.SimpleBindings;
-import org.corant.modules.lang.javascript.NashornScriptEngines;
-import org.corant.modules.lang.kotlin.KotlinScriptEngines;
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import org.corant.modules.query.mapping.FetchQuery;
 import org.corant.modules.query.mapping.FetchQuery.FetchQueryParameter;
 import org.corant.modules.query.mapping.QueryHint;
 import org.corant.modules.query.mapping.Script;
-import org.corant.modules.query.mapping.Script.ScriptType;
-import org.corant.shared.exception.CorantRuntimeException;
-import org.corant.shared.exception.NotSupportedException;
-import org.corant.shared.ubiquity.Tuple.Pair;
+import org.corant.modules.query.shared.ScriptProcessor.ParameterAndResult;
+import org.corant.modules.query.shared.ScriptProcessor.ParameterAndResultPair;
+import org.corant.shared.ubiquity.Sortable;
 
 /**
  * corant-modules-query-shared
@@ -43,151 +32,63 @@ import org.corant.shared.ubiquity.Tuple.Pair;
  * @author bingo 上午10:42:18
  *
  */
+@Singleton
 public class QueryScriptEngines {
-
-  public static final String RESULT_FUNC_PARAMETER_NAME = "r";
-  public static final String FETCHED_RESULT_FUNC_PARAMETER_NAME = "fr";
-  public static final String RESULTS_FUNC_PARAMETER_NAME = "rs";
-  public static final String FETCHED_RESULTS_FUNC_PARAMETER_NAME = "frs";
-  public static final String PARAMETER_FUNC_PARAMETER_NAME = "p";
 
   static final Logger logger = Logger.getLogger(QueryScriptEngines.class.getName());
 
-  static final ThreadLocal<Map<Object, Consumer<Object[]>>> CONSUMERS =
-      ThreadLocal.withInitial(HashMap::new);
-  static final ThreadLocal<Map<Object, Function<Object[], Object>>> FUNCTIONS =
-      ThreadLocal.withInitial(HashMap::new);
+  @Inject
+  protected Instance<ScriptProcessor> processors;
 
   /**
    * NOTE: Don't share the complied function in multi threads.
    *
-   * @param fetchQuery
-   * @return resolveFetchInjections
+   * @see ScriptProcessor#resolveFetchInjections(FetchQuery)
    */
-  public static Function<Object[], Object> resolveFetchInjections(FetchQuery fetchQuery) {
-    if (fetchQuery.getInjectionScript().isValid()) {
-      return complieFunction(fetchQuery.getInjectionScript().getId(),
-          () -> Pair.of(fetchQuery.getInjectionScript(),
-              new String[] {RESULTS_FUNC_PARAMETER_NAME, FETCHED_RESULTS_FUNC_PARAMETER_NAME}));
-    } else {
-      return null;
-    }
+  public Function<ParameterAndResultPair, Object> resolveFetchInjections(FetchQuery fetchQuery) {
+    final Script script = fetchQuery.getInjectionScript();
+    final ScriptProcessor processor =
+        processors.stream().filter(p -> p.supports(script)).min(Sortable::compare).orElse(null);
+    return processor != null ? processor.resolveFetchInjections(fetchQuery) : null;
   }
 
   /**
    * NOTE: Don't share the complied function in multi threads.
    *
-   * @param fetchQuery
-   * @return resolveFetchInjections
+   * @see ScriptProcessor#resolveFetchParameter(FetchQueryParameter)
    */
-  public static Function<Object[], Object> resolveFetchParameter(FetchQueryParameter parameter) {
-    if (parameter.getScript().isValid()) {
-      return complieFunction(parameter.getScript().getId(), () -> Pair.of(parameter.getScript(),
-          new String[] {PARAMETER_FUNC_PARAMETER_NAME, RESULTS_FUNC_PARAMETER_NAME}));
-    } else {
-      return null;
-    }
+  public Function<ParameterAndResult, Object> resolveFetchParameter(FetchQueryParameter parameter) {
+    final ScriptProcessor processor = processors.stream()
+        .filter(p -> p.supports(parameter.getScript())).min(Sortable::compare).orElse(null);
+    return processor != null ? processor.resolveFetchParameter(parameter) : null;
   }
 
   /**
    * NOTE: Don't share the complied function in multi threads.
    *
-   * @param fetchQuery
-   * @return resolveFetchPredicates
+   * @see ScriptProcessor#resolveFetchPredicates(FetchQuery)
    */
-  public static Function<Object[], Object> resolveFetchPredicates(FetchQuery fetchQuery) {
-    if (fetchQuery.getPredicateScript().isValid()) {
-      return complieFunction(fetchQuery.getPredicateScript().getId(),
-          () -> Pair.of(fetchQuery.getPredicateScript(),
-              new String[] {PARAMETER_FUNC_PARAMETER_NAME, RESULT_FUNC_PARAMETER_NAME}));
-    } else {
-      return null;
-    }
+  public Function<ParameterAndResult, Object> resolveFetchPredicates(FetchQuery fetchQuery) {
+    final ScriptProcessor processor =
+        processors.stream().filter(p -> p.supports(fetchQuery.getPredicateScript()))
+            .min(Sortable::compare).orElse(null);
+    return processor != null ? processor.resolveFetchPredicates(fetchQuery) : null;
   }
 
   /**
    * NOTE: Don't share the complied function in multi threads.
    *
-   * @param queryHint
-   * @return resolveQueryHintResultScriptMappers
+   * @see ScriptProcessor#resolveQueryHintResultScriptMappers(QueryHint)
    */
-  public static Consumer<Object[]> resolveQueryHintResultScriptMappers(QueryHint queryHint) {
+  public Function<ParameterAndResult, Object> resolveQueryHintResultScriptMappers(
+      QueryHint queryHint) {
     if (queryHint != null && queryHint.getScript().isValid()) {
-      return complieConsumer(queryHint.getScript().getId(), () -> Pair.of(queryHint.getScript(),
-          new String[] {PARAMETER_FUNC_PARAMETER_NAME, RESULT_FUNC_PARAMETER_NAME}));
+      final ScriptProcessor processor = processors.stream()
+          .filter(p -> p.supports(queryHint.getScript())).min(Sortable::compare).orElse(null);
+      return processor != null ? processor.resolveQueryHintResultScriptMappers(queryHint) : null;
     } else {
       return null;
     }
   }
 
-  static Consumer<Object[]> complieConsumer(Object id, Supplier<Pair<Script, String[]>> supplier) {
-    return CONSUMERS.get().computeIfAbsent(id, k -> {
-      try {
-        logger.fine(() -> String.format(
-            "Compile the query consumer script, id is %s, the thread name is %s id is %s",
-            id.toString(), Thread.currentThread().getName(), Thread.currentThread().getId()));
-        final Pair<Script, String[]> snp = shouldNotNull(shouldNotNull(supplier).get());
-        final Script script = shouldNotNull(snp.getKey());
-        final Compilable se = getCompilable(script.getType());
-        final CompiledScript cs = se.compile(shouldNotBlank(script.getCode()));
-        return pns -> {
-          Bindings bindings = new SimpleBindings();
-          try {
-            for (int i = 0; i < pns.length; i++) {
-              bindings.put(snp.getValue()[i], pns[i]);
-            }
-            cs.eval(bindings);
-          } catch (ScriptException e) {
-            throw new CorantRuntimeException(e);
-          } finally {
-            bindings.clear();
-          }
-        };
-      } catch (ScriptException e) {
-        throw new CorantRuntimeException(e);
-      }
-    });
-  }
-
-  static Function<Object[], Object> complieFunction(Object id,
-      Supplier<Pair<Script, String[]>> supplier) {
-    return FUNCTIONS.get().computeIfAbsent(id, k -> {
-      try {
-        logger.fine(() -> String.format(
-            "Compile the query function script, id is %s, the thread name is %s id is %s",
-            id.toString(), Thread.currentThread().getName(), Thread.currentThread().getId()));
-        final Pair<Script, String[]> snp = shouldNotNull(shouldNotNull(supplier).get());
-        final Script script = shouldNotNull(snp.getKey());
-        final Compilable se = getCompilable(script.getType());
-        final CompiledScript cs = se.compile(shouldNotBlank(script.getCode()));
-        return pns -> {
-          Bindings bindings = new SimpleBindings();
-          try {
-            for (int i = 0; i < pns.length; i++) {
-              bindings.put(snp.getValue()[i], pns[i]);
-            }
-            return cs.eval(bindings);
-          } catch (ScriptException e) {
-            throw new CorantRuntimeException(e);
-          } finally {
-            bindings.clear();
-          }
-        };
-      } catch (ScriptException e) {
-        throw new CorantRuntimeException(e);
-      }
-    });
-  }
-
-  static Compilable getCompilable(ScriptType type) {
-    if (type.equals(ScriptType.JS)) {
-      return (Compilable) NashornScriptEngines.createEngine();
-    } else if (type.equals(ScriptType.KT)) {
-      return (Compilable) KotlinScriptEngines.createEngine();
-    } else {
-      throw new NotSupportedException(
-          "Can't not support script engine for %s, currently we only support using javascript / kotlin as fetch query script.",
-          type);
-    }
-  }
 }

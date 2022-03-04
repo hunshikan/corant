@@ -45,6 +45,7 @@ import javax.enterprise.inject.spi.CDI;
 import javax.enterprise.inject.spi.Extension;
 import org.corant.kernel.event.CorantLifecycleEvent.LifecycleEventEmitter;
 import org.corant.kernel.event.PostContainerReadyEvent;
+import org.corant.kernel.event.PostCorantReadyAsyncEvent;
 import org.corant.kernel.event.PostCorantReadyEvent;
 import org.corant.kernel.jmx.Power;
 import org.corant.kernel.logging.LoggerFactory;
@@ -67,7 +68,7 @@ import org.corant.shared.util.Threads;
  *
  * <p>
  * Class that can be used to bootstrap and launch a Corant application from a Java main method. By
- * default class will perform the following steps to bootstrap your application:
+ * default, class will perform the following steps to bootstrap your application:
  * <ul>
  * <li>Execute the boot preprocessor to handle some work before CDI container start, the works like
  * setting some appropriate configuration properties to intervene system running.</li>
@@ -162,8 +163,8 @@ public class Corant implements AutoCloseable {
   private volatile Power power;
 
   /**
-   * Use the class loader of Corant.class as current thread context and the CDI container class
-   * loader.
+   * Use the class loader of {@code Corant.class} as current thread context and the CDI container
+   * class loader.
    */
   public Corant() {
     this(null, null, Strings.EMPTY_ARRAY);
@@ -189,8 +190,8 @@ public class Corant implements AutoCloseable {
    * arguments. If the given bean classes are not null then they will be added to the set of bean
    * classes for the synthetic bean archive. If the given class loader is not null then it will be
    * set to the context ClassLoader for current Thread and the CDI container class loader else we
-   * use Corant.class class loader. The given arguments will be propagated to all CorantBootHandler
-   * and all CorantLifecycleEvent listeners.
+   * use {@code Corant.class} class loader. The given arguments will be propagated to all
+   * CorantBootHandler and all CorantLifecycleEvent listeners.
    *
    * @param beanClasses the additional synthetic bean classes
    * @param classLoader the class loader for current thread and CDI container
@@ -223,9 +224,9 @@ public class Corant implements AutoCloseable {
   }
 
   /**
-   * Use the given arguments and the class loader of Corant.class to construct a Corant instance.The
-   * given arguments will be propagate to all CorantBootHandler and all CorantLifecycleEvent
-   * listeners.
+   * Use the given arguments and the class loader of {@code Corant.class} to construct a Corant
+   * instance.The given arguments will be propagated to all CorantBootHandler and all
+   * CorantLifecycleEvent listeners.
    *
    * @param arguments the application arguments use for boot handler
    */
@@ -260,7 +261,7 @@ public class Corant implements AutoCloseable {
   }
 
   /**
-   * Return a CDI bean instance through the bean class(non synthetic) and qualifiers; mainly used
+   * Return a CDI bean instance through the bean class(non-synthetic) and qualifiers; mainly used
    * for temporary works. If the Corant application is not started, this method will try to start
    * it, and this method does not directly close it.
    *
@@ -335,12 +336,12 @@ public class Corant implements AutoCloseable {
   }
 
   /**
-   * Shutdown the Corant application. If an error occurs, allow multiple attempts to shutdown. If
+   * Shutdown the Corant application. If an error occurs, allow multiple attempts to shut down. If
    * you want to start it again, you can only start it through the {@link #startup()} method, or
    * instantiate Corant and call the {@link #start(Consumer)} method.
    *
-   * @param attempts the number of attempts to shutdown
-   * @param intervalMs time between attempts to shutdown in milliseconds
+   * @param attempts the number of attempts to shut down
+   * @param intervalMs time between attempts to shut down in milliseconds
    */
   public static synchronized void shutdown(int attempts, long intervalMs) {
     int atts = max(attempts, 1);
@@ -602,16 +603,15 @@ public class Corant implements AutoCloseable {
       // emit post container ready events
       stopWatch.start();
       LifecycleEventEmitter emitter = container.select(LifecycleEventEmitter.class).get();
-      emitter.fire(new PostContainerReadyEvent(arguments));
+      emitter.fire(new PostContainerReadyEvent(arguments), false);
       stopWatch
-          .stop(t -> logInfo("All modules have been initialized, takes %ss.", t.getTimeSeconds()));
+          .stop(t -> logInfo("All modules have been initialized, takes %s ms.", t.getTimeMillis()));
 
       // handle post started spi
       stopWatch.start();
       invokeBootHandlerAfterStarted();
       stopWatch.stop((tk, sw) -> {
-        logInfo("The post-started spi processing has been completed, takes %ss.",
-            tk.getTimeSeconds());
+        logInfo("The post-started spi processing has completed, takes %s ms.", tk.getTimeMillis());
         double tt = sw.getTotalTimeSeconds();
         if (tt > 8) {
           logInfo("The %s has been started, takes %ss. It's been a long way, but we're here.",
@@ -628,10 +628,10 @@ public class Corant implements AutoCloseable {
 
       // emit post corant ready events
       stopWatch.start();
-      emitter.fire(new PostCorantReadyEvent(arguments));
-      stopWatch.destroy(sw -> logInfo("All preparations have been completed, takes %ss.%s",
-          sw.getLastTaskInfo().getTimeSeconds(), boostLine(".")));
-
+      emitter.fire(new PostCorantReadyEvent(arguments), false);
+      emitter.fire(new PostCorantReadyAsyncEvent(arguments), true);// since 1.8 2022-01-12
+      stopWatch.destroy(sw -> logInfo("All preparations have been triggered, takes %s ms.%s",
+          sw.getLastTaskInfo().getTimeMillis(), boostLine(".")));
     } catch (Throwable e) {
       log(Level.SEVERE, e, "The %s occurred error after container started!", APP_NAME);
       throw new CorantRuntimeException(e);
@@ -648,7 +648,7 @@ public class Corant implements AutoCloseable {
       stopWatch.stop(t -> {
         Defaults.CORANT_VERSION.ifPresent(v -> logInfo("Corant Version: %s", v));
         logInfo("Starting the %s ...", APP_NAME);
-        logInfo("The pre-start spi processing has been completed, takes %ss.", t.getTimeSeconds());
+        logInfo("The pre-start spi processing has completed, takes %s ms.", t.getTimeMillis());
       });
       registerMBean();
     } catch (Throwable e) {
@@ -675,8 +675,8 @@ public class Corant implements AutoCloseable {
       Services.select(Configurator.class, classLoader).sorted(Sortable::compare)
           .filter(c -> c.supports(initializer)).forEach(c -> c.accept(initializer));
       container = initializer.initialize();
-      stopWatch
-          .stop(t -> logInfo("The container has been initialized, takes %ss.", t.getTimeSeconds()));
+      stopWatch.stop(
+          t -> logInfo("The container has been initialized, takes %s ms.", t.getTimeMillis()));
     } catch (Throwable e) {
       log(Level.SEVERE, null, "Initialize the %s container occurred error!", APP_NAME);
       throw new CorantRuntimeException(e);
@@ -712,13 +712,11 @@ public class Corant implements AutoCloseable {
     if (cmd == null) {
       CorantBootHandler.load(classLoader)
           .forEach(h -> h.handleAfterStarted(this, Arrays.copyOf(arguments, arguments.length)));
+    } else if (cmd.hasArguments()) {
+      CorantBootHandler.load(classLoader, cmd.getArguments())
+          .forEach(h -> h.handleAfterStarted(this, Arrays.copyOf(arguments, arguments.length)));
     } else {
-      if (cmd.hasArguments()) {
-        CorantBootHandler.load(classLoader, cmd.getArguments())
-            .forEach(h -> h.handleAfterStarted(this, Arrays.copyOf(arguments, arguments.length)));
-      } else {
-        logInfo("The after start boot handlers are disabled!");
-      }
+      logInfo("The after start boot handlers are disabled!");
     }
   }
 
@@ -727,13 +725,11 @@ public class Corant implements AutoCloseable {
     if (cmd == null) {
       CorantBootHandler.load(classLoader).forEach(
           h -> h.handleAfterStopped(classLoader, Arrays.copyOf(arguments, arguments.length)));
+    } else if (cmd.hasArguments()) {
+      CorantBootHandler.load(classLoader, cmd.getArguments()).forEach(
+          h -> h.handleAfterStopped(classLoader, Arrays.copyOf(arguments, arguments.length)));
     } else {
-      if (cmd.hasArguments()) {
-        CorantBootHandler.load(classLoader, cmd.getArguments()).forEach(
-            h -> h.handleAfterStopped(classLoader, Arrays.copyOf(arguments, arguments.length)));
-      } else {
-        logInfo("The after stopped handlers are disabled!");
-      }
+      logInfo("The after stopped handlers are disabled!");
     }
   }
 
@@ -742,13 +738,11 @@ public class Corant implements AutoCloseable {
     if (cmd == null) {
       CorantBootHandler.load(classLoader).forEach(
           h -> h.handleBeforeStart(classLoader, Arrays.copyOf(arguments, arguments.length)));
+    } else if (cmd.hasArguments()) {
+      CorantBootHandler.load(classLoader, cmd.getArguments()).forEach(
+          h -> h.handleBeforeStart(classLoader, Arrays.copyOf(arguments, arguments.length)));
     } else {
-      if (cmd.hasArguments()) {
-        CorantBootHandler.load(classLoader, cmd.getArguments()).forEach(
-            h -> h.handleBeforeStart(classLoader, Arrays.copyOf(arguments, arguments.length)));
-      } else {
-        logInfo("The before start boot handlers are disabled!");
-      }
+      logInfo("The before start boot handlers are disabled!");
     }
   }
 

@@ -37,7 +37,7 @@ import java.util.Arrays;
  */
 public class PathResource implements WritableResource {
 
-  public static final OpenOption[] EMPTY_ARRAY = new OpenOption[0];
+  public static final OpenOption[] EMPTY_ARRAY = {};
 
   protected final OpenOption[] openOptions;
 
@@ -110,6 +110,14 @@ public class PathResource implements WritableResource {
       throw new IOException(path + " is read only.");
     }
     return Files.newByteChannel(path, StandardOpenOption.WRITE);
+  }
+
+  @Override
+  public <T> T unwrap(Class<T> cls) {
+    if (PathResource.class.isAssignableFrom(cls)) {
+      return cls.cast(this);
+    }
+    return WritableResource.super.unwrap(cls);
   }
 
   protected boolean isReadOnly() {

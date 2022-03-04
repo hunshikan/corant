@@ -30,6 +30,22 @@ import org.corant.shared.util.Objects;
  */
 public interface Tuple {
 
+  static <L, R> Pair<L, R> pairOf(final L left, final R right) {
+    return Pair.of(left, right);
+  }
+
+  static <L, R> Pair<L, R> pairOf(final Map.Entry<L, R> entry) {
+    return Pair.of(entry.getKey(), entry.getValue());
+  }
+
+  static <T extends Comparable<T>> Range<T> rangeOf(T min, T max) {
+    return Range.of(min, max);
+  }
+
+  static <L, M, R> Triple<L, M, R> tripleOf(final L left, final M middle, final R right) {
+    return Triple.of(left, middle, right);
+  }
+
   /**
    * Returns true if this tuple contains the specified element. More formally, returns true if and
    * only if this tuple contains at least one element e such that Objects.equals(o, e).
@@ -92,14 +108,6 @@ public interface Tuple {
       return new Pair<>(entry.getKey(), entry.getValue());
     }
 
-    public static <L, R> Pair<L, R> pairOf(final L left, final R right) {
-      return of(left, right);
-    }
-
-    public static <L, R> Pair<L, R> pairOf(final Map.Entry<L, R> entry) {
-      return of(entry.getKey(), entry.getValue());
-    }
-
     public String asString(final String format) {
       return String.format(format, left, right);
     }
@@ -146,8 +154,7 @@ public interface Tuple {
       final int prime = 31;
       int result = 1;
       result = prime * result + (left == null ? 0 : left.hashCode());
-      result = prime * result + (right == null ? 0 : right.hashCode());
-      return result;
+      return prime * result + (right == null ? 0 : right.hashCode());
     }
 
     @Override
@@ -161,6 +168,10 @@ public interface Tuple {
 
     public L left() {
       return left;
+    }
+
+    public Pair<R, L> reverse() {
+      return new Pair<>(getRight(), getLeft());
     }
 
     public R right() {
@@ -224,16 +235,12 @@ public interface Tuple {
     }
 
     @SuppressWarnings("unchecked")
-    public static <X extends Comparable<X>> Range<X> empty() {
+    public static <T extends Comparable<T>> Range<T> empty() {
       return emptyInstance;
     }
 
     public static <T extends Comparable<T>> Range<T> of(T min, T max) {
       return new Range<>(min, max);
-    }
-
-    public static <T extends Comparable<T>> Range<T> rangeOf(T min, T max) {
-      return of(min, max);
     }
 
     public String asString(final String format) {
@@ -303,8 +310,7 @@ public interface Tuple {
       final int prime = 31;
       int result = 1;
       result = prime * result + (max == null ? 0 : max.hashCode());
-      result = prime * result + (min == null ? 0 : min.hashCode());
-      return result;
+      return prime * result + (min == null ? 0 : min.hashCode());
     }
 
     public boolean intersect(Range<T> other) {
@@ -394,10 +400,6 @@ public interface Tuple {
       return new Triple<>(left, middle, right);
     }
 
-    public static <L, M, R> Triple<L, M, R> tripleOf(final L left, final M middle, final R right) {
-      return of(left, middle, right);
-    }
-
     public String asString(final String format) {
       return String.format(format, left, middle, right);
     }
@@ -438,8 +440,7 @@ public interface Tuple {
       int result = 1;
       result = prime * result + (left == null ? 0 : left.hashCode());
       result = prime * result + (middle == null ? 0 : middle.hashCode());
-      result = prime * result + (right == null ? 0 : right.hashCode());
-      return result;
+      return prime * result + (right == null ? 0 : right.hashCode());
     }
 
     @Override
@@ -453,6 +454,10 @@ public interface Tuple {
 
     public M middle() {
       return middle;
+    }
+
+    public Triple<R, M, L> reverse() {
+      return new Triple<>(getRight(), getMiddle(), getLeft());
     }
 
     public R right() {

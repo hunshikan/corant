@@ -37,7 +37,7 @@ import org.corant.shared.util.FileUtils;
  * @author bingo 下午4:06:15
  *
  */
-public class URLResource implements WrappedResource {
+public class URLResource implements Resource {
   protected final SourceType sourceType;
   protected final URL url;
 
@@ -76,8 +76,8 @@ public class URLResource implements WrappedResource {
 
   @Override
   public Map<String, Object> getMetadata() {
-    return immutableMapOf("location", getLocation(), "sourceType",
-        sourceType == null ? null : sourceType.name(), "url", url.toExternalForm());
+    return immutableMapOf(META_NAME, getName(), META_SOURCE_TYPE,
+        sourceType == null ? null : sourceType.name());
   }
 
   @Override
@@ -106,8 +106,7 @@ public class URLResource implements WrappedResource {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + getURI().hashCode(); // FIXME URI hq
-    return result;
+    return prime * result + getURI().hashCode();
   }
 
   @Override
@@ -124,7 +123,7 @@ public class URLResource implements WrappedResource {
         return FileChannel.open(file.toPath(), StandardOpenOption.READ);
       }
     }
-    return WrappedResource.super.openReadableChannel();
+    return Resource.super.openReadableChannel();
   }
 
   @Override
@@ -132,13 +131,12 @@ public class URLResource implements WrappedResource {
     return getClass().getSimpleName() + " [sourceType=" + sourceType + ", url=" + url + "]";
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public <T> T unwrap(Class<T> cls) {
     if (URLResource.class.isAssignableFrom(cls)) {
-      return (T) this;
+      return cls.cast(this);
     }
-    throw new IllegalArgumentException("Can't unwrap resource to " + cls);
+    return Resource.super.unwrap(cls);
   }
 
 }

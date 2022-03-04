@@ -11,15 +11,16 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.corant.modules.query.shared.dynamic.javascript;
+package org.corant.modules.query.shared.dynamic.javabean;
 
-import java.util.function.Function;
-import org.corant.modules.lang.javascript.NashornScriptEngines;
+import static org.corant.context.Beans.resolve;
+import javax.enterprise.inject.literal.NamedLiteral;
 import org.corant.modules.query.FetchQueryHandler;
 import org.corant.modules.query.QueryHandler;
 import org.corant.modules.query.mapping.Query;
 import org.corant.modules.query.shared.dynamic.AbstractDynamicQuerierBuilder;
 import org.corant.modules.query.shared.dynamic.DynamicQuerier;
+import org.corant.modules.query.spi.QueryScriptResolver;
 
 /**
  * corant-modules-query-shared
@@ -27,14 +28,15 @@ import org.corant.modules.query.shared.dynamic.DynamicQuerier;
  * @author bingo 上午11:18:32
  *
  */
-public abstract class JavascriptDynamicQuerierBuilder<P, S, Q extends DynamicQuerier<P, S>>
+public abstract class JavaBeanDynamicQuerierBuilder<P, S, Q extends DynamicQuerier<P, S>>
     extends AbstractDynamicQuerierBuilder<P, S, Q> {
 
-  protected final Function<Object[], Object> execution;
+  protected final QueryScriptResolver scriptResolver;
 
-  protected JavascriptDynamicQuerierBuilder(Query query, QueryHandler queryHandler,
+  protected JavaBeanDynamicQuerierBuilder(Query query, QueryHandler queryHandler,
       FetchQueryHandler fetchQueryHandler) {
     super(query, queryHandler, fetchQueryHandler);
-    execution = NashornScriptEngines.createFunction(query.getScript().getCode(), "p", "up");
+    scriptResolver =
+        resolve(QueryScriptResolver.class, NamedLiteral.of(query.getScript().getCode()));
   }
 }

@@ -30,15 +30,14 @@ public class CorantConfigValue implements ConfigValue {
   private final int sourceOrdinal;
 
   /**
-   * @param name
-   * @param rawValue
-   * @param value
-   * @param sourceName
-   * @param sourceOrdinal
+   * @param name the name of the property.
+   * @param rawValue the value of the property lookup without any transformation
+   * @param value the value of the property lookup with transformations
+   * @param sourceName the ConfigSource name
+   * @param sourceOrdinal the ConfigSource ordinal
    */
   public CorantConfigValue(String name, String rawValue, String value, String sourceName,
       int sourceOrdinal) {
-    super();
     this.name = name;
     this.rawValue = rawValue;
     this.value = value;

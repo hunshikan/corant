@@ -40,6 +40,8 @@ public interface Resource {
   String META_CONTENT_TYPE = "Content-Type";
   String META_CONTENT_LENGTH = "Content-Length";
   String META_LAST_MODIFIED = "Last-Modified";
+  String META_SOURCE_TYPE = "Source-Type";
+  String META_NAME = "Name";
 
   /**
    * Determine whether this resource actually exists in physical form.
@@ -81,8 +83,8 @@ public interface Resource {
    * @return getMetadata
    */
   default Map<String, Object> getMetadata() {
-    return immutableMapOf("location", getLocation(), "sourceType",
-        getSourceType() == null ? null : getSourceType().name(), "name", getName());
+    return immutableMapOf(META_SOURCE_TYPE, getSourceType() == null ? null : getSourceType().name(),
+        META_NAME, getName());
   }
 
   /**
@@ -131,5 +133,12 @@ public interface Resource {
           () -> String.format("Can't not open stream from %s.", getLocation()));
     }
     return null;
+  }
+
+  default <T> T unwrap(Class<T> cls) {
+    if (Resource.class.isAssignableFrom(cls)) {
+      return cls.cast(this);
+    }
+    throw new IllegalArgumentException("Can't unwrap resource to " + cls);
   }
 }

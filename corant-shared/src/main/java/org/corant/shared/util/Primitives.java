@@ -16,9 +16,18 @@ package org.corant.shared.util;
 import static org.corant.shared.util.Maps.immutableMapOf;
 import java.lang.reflect.Array;
 import java.lang.reflect.Type;
+import java.net.URI;
+import java.net.URL;
+import java.sql.Timestamp;
+import java.time.temporal.TemporalAccessor;
+import java.time.temporal.TemporalAmount;
 import java.util.Collections;
+import java.util.Currency;
+import java.util.Date;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.TimeZone;
 import java.util.stream.Collectors;
 import org.corant.shared.exception.CorantRuntimeException;
 
@@ -30,23 +39,23 @@ import org.corant.shared.exception.CorantRuntimeException;
  */
 public class Primitives {
 
-  public static final boolean[] EMPTY_BOOLEAN_ARRAY = new boolean[0];
+  public static final boolean[] EMPTY_BOOLEAN_ARRAY = {};
   public static final byte[] EMPTY_BYTE_ARRAY = Bytes.EMPTY_ARRAY;
   public static final char[] EMPTY_CHAR_ARRAY = Chars.EMPTY_ARRAY;
-  public static final short[] EMPTY_SHORT_ARRAY = new short[0];
-  public static final int[] EMPTY_INTEGER_ARRAY = new int[0];
-  public static final long[] EMPTY_LONG_ARRAY = new long[0];
-  public static final float[] EMPTY_FLOAT_ARRAY = new float[0];
-  public static final double[] EMPTY_DOUBLE_ARRAY = new double[0];
+  public static final short[] EMPTY_SHORT_ARRAY = {};
+  public static final int[] EMPTY_INTEGER_ARRAY = {};
+  public static final long[] EMPTY_LONG_ARRAY = {};
+  public static final float[] EMPTY_FLOAT_ARRAY = {};
+  public static final double[] EMPTY_DOUBLE_ARRAY = {};
 
-  public static final Boolean[] EMPTY_WRAP_BOOLEAN_ARRAY = new Boolean[0];
-  public static final Byte[] EMPTY_WRAP_BYTE_ARRAY = new Byte[0];
-  public static final Character[] EMPTY_WRAP_CHAR_ARRAY = new Character[0];
-  public static final Short[] EMPTY_WRAP_SHORT_ARRAY = new Short[0];
-  public static final Integer[] EMPTY_WRAP_INTEGER_ARRAY = new Integer[0];
-  public static final Long[] EMPTY_WRAP_LONG_ARRAY = new Long[0];
-  public static final Float[] EMPTY_WRAP_FLOAT_ARRAY = new Float[0];
-  public static final Double[] EMPTY_WRAP_DOUBLE_ARRAY = new Double[0];
+  public static final Boolean[] EMPTY_WRAP_BOOLEAN_ARRAY = {};
+  public static final Byte[] EMPTY_WRAP_BYTE_ARRAY = {};
+  public static final Character[] EMPTY_WRAP_CHAR_ARRAY = {};
+  public static final Short[] EMPTY_WRAP_SHORT_ARRAY = {};
+  public static final Integer[] EMPTY_WRAP_INTEGER_ARRAY = {};
+  public static final Long[] EMPTY_WRAP_LONG_ARRAY = {};
+  public static final Float[] EMPTY_WRAP_FLOAT_ARRAY = {};
+  public static final Double[] EMPTY_WRAP_DOUBLE_ARRAY = {};
 
   public static final Map<String, Class<?>> NAME_PRIMITIVE_MAP =
       immutableMapOf("boolean", Boolean.TYPE, "byte", Byte.TYPE, "char", Character.TYPE, "short",
@@ -76,6 +85,16 @@ public class Primitives {
 
   public static boolean isPrimitiveWrapperArray(final Class<?> clazz) {
     return clazz.isArray() && isPrimitiveWrapper(clazz.getComponentType());
+  }
+
+  public static boolean isSimpleClass(Class<?> type) {
+    return isPrimitiveOrWrapper(type) || String.class.equals(type)
+        || Number.class.isAssignableFrom(type) || Date.class.isAssignableFrom(type)
+        || Enum.class.isAssignableFrom(type) || Timestamp.class.isAssignableFrom(type)
+        || TemporalAccessor.class.isAssignableFrom(type) || URL.class.isAssignableFrom(type)
+        || URI.class.isAssignableFrom(type) || TemporalAmount.class.isAssignableFrom(type)
+        || Currency.class.isAssignableFrom(type) || Locale.class.isAssignableFrom(type)
+        || TimeZone.class.isAssignableFrom(type);
   }
 
   public static boolean[] unwrap(final Boolean[] array) {

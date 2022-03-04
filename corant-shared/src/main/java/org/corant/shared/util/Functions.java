@@ -15,6 +15,7 @@ package org.corant.shared.util;
 
 import static org.corant.shared.util.Assertions.shouldNotNull;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -52,6 +53,34 @@ public class Functions {
 
   @SuppressWarnings("rawtypes")
   public static final Predicate EMPTY_PREDICATE_FALSE = p -> false;
+
+  public static <T> Callable<T> asCallable(Runnable runnable) {
+    return () -> {
+      shouldNotNull(runnable).run();
+      return null;
+    };
+  }
+
+  public static <T> Callable<T> asCallable(Supplier<T> supplier) {
+    return () -> supplier.get();
+  }
+
+  public static <T> Supplier<T> asSupplier(Callable<T> callable) {
+    return () -> {
+      try {
+        return callable.call();
+      } catch (Exception e) {
+        throw new CorantRuntimeException(e);
+      }
+    };
+  }
+
+  public static <T> Supplier<T> asSupplier(Runnable runnable) {
+    return () -> {
+      shouldNotNull(runnable).run();
+      return null;
+    };
+  }
 
   @SuppressWarnings("unchecked")
   public static <T> Consumer<T> emptyConsumer() {
@@ -106,6 +135,16 @@ public class Functions {
     };
   }
 
+  public static <T> Consumer<T> uncheckedConsumer(ThrowingConsumer<T, Exception> consumer) {
+    return i -> {
+      try {
+        consumer.accept(i);
+      } catch (Exception ex) {
+        throw new CorantRuntimeException(ex);
+      }
+    };
+  }
+
   public static <T, R, E extends Throwable> Function<T, R> uncheckedFunction(
       ThrowingFunction<T, R, E> computer) {
     return t -> {
@@ -113,16 +152,6 @@ public class Functions {
         return shouldNotNull(computer).apply(t);
       } catch (Throwable e) {
         throw new CorantRuntimeException(e);
-      }
-    };
-  }
-
-  public static <T> Consumer<T> uncheckedConsumer(ThrowingConsumer<T, Exception> consumer) {
-    return i -> {
-      try {
-        consumer.accept(i);
-      } catch (Exception ex) {
-        throw new CorantRuntimeException(ex);
       }
     };
   }

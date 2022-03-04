@@ -17,8 +17,10 @@ import static org.corant.shared.normal.Defaults.FOUR_KB;
 import static org.corant.shared.util.Assertions.shouldBeFalse;
 import static org.corant.shared.util.Assertions.shouldBeTrue;
 import static org.corant.shared.util.Assertions.shouldNotNull;
+import static org.corant.shared.util.Empties.isEmpty;
 import static org.corant.shared.util.Objects.areEqual;
 import static org.corant.shared.util.Objects.defaultObject;
+import static org.corant.shared.util.Objects.isNoneNull;
 import static org.corant.shared.util.Objects.max;
 import static org.corant.shared.util.Streams.streamOf;
 import static org.corant.shared.util.Strings.isBlank;
@@ -31,10 +33,18 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.UserDefinedFileAttributeView;
+import java.util.Collections;
 import java.util.Enumeration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.function.Predicate;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -53,7 +63,7 @@ import org.corant.shared.normal.Defaults;
  */
 public class FileUtils {
 
-  public static final File[] EMPTY_ARRAY = new File[0];
+  public static final File[] EMPTY_ARRAY = {};
   public static final char EXTENSION_SEPARATOR = '.';
   public static final String EXTENSION_SEPARATOR_STR = Character.toString(EXTENSION_SEPARATOR);
   public static final char UNIX_SEPARATOR = '/';
@@ -63,7 +73,7 @@ public class FileUtils {
   public static final String JAR_URL_SEPARATOR = "!/";
   public static final String FILE_URL_PREFIX = "file:";
   protected static final Logger logger = Logger.getLogger(FileUtils.class.getName());
-  static final String[] JARS = new String[] {"jar", "war, ", "zip", "vfszip", "wsjar"};
+  static final String[] JARS = {"jar", "war, ", "zip", "vfszip", "wsjar"};
 
   private FileUtils() {}
 
@@ -98,7 +108,7 @@ public class FileUtils {
         FileChannel output = fos.getChannel()) {
       final long size = input.size();
       long pos = 0;
-      long count = 0;
+      long count;
       while (pos < size && !Thread.currentThread().isInterrupted()) {
         final long remain = size - pos;
         count = remain > bufferSize ? bufferSize : remain;
@@ -206,13 +216,11 @@ public class FileUtils {
             + "not a directory. Unable to create directory.";
         throw new IOException(message);
       }
-    } else {
-      // Double-check that some other thread or process hasn't made
-      // the directory in the background
-      if (!directory.mkdirs() && !directory.isDirectory()) {
-        final String message = "Unable to create directory " + directory;
-        throw new IOException(message);
-      }
+    } else // Double-check that some other thread or process hasn't made
+    // the directory in the background
+    if (!directory.mkdirs() && !directory.isDirectory()) {
+      final String message = "Unable to create directory " + directory;
+      throw new IOException(message);
     }
   }
 
@@ -297,12 +305,44 @@ public class FileUtils {
   }
 
   /**
+   * Returns a user defined file attributes map from the given file path if the file system
+   * supports.
+   *
+   * @param path the file path
+   * @throws IOException if an I/O error occurs
+   *
+   * @see UserDefinedFileAttributeView
+   */
+  public static Map<String, String> getUserDefinedAttributes(final Path path) throws IOException {
+    Map<String, String> atts = new LinkedHashMap<>();
+    if (Files.getFileStore(shouldNotNull(path))
+        .supportsFileAttributeView(UserDefinedFileAttributeView.class)) {
+      UserDefinedFileAttributeView view =
+          Files.getFileAttributeView(path, UserDefinedFileAttributeView.class);
+      List<String> attNames = defaultObject(view.list(), Collections::emptyList);
+      for (String attName : attNames) {
+        int attSize = view.size(attName);
+        if (attSize > 0) {
+          ByteBuffer buffer = ByteBuffer.allocate(attSize);
+          view.read(attName, buffer);
+          atts.put(attName, Defaults.DFLT_CHARSET.decode(buffer.flip()).toString());
+          buffer.clear();
+        }
+      }
+    } else {
+      logger.warning(() -> "The file system can't support user defined file attribute!");
+    }
+    return atts;
+  }
+
+  /**
    * Compare whether two files are the same by byte, if the file is a directory or the file is not
    * readable, it returns False.
    *
    * @param file1 the file to be compared
    * @param file2 the file to be compared
-   * @throws IOException isSameContent
+   * @throws IOException if the given file does not exist,is a directory rather than a regular
+   *         file,or for some other reason cannot be opened forreading
    */
   public static boolean isSameContent(final File file1, final File file2) throws IOException {
     if (file1 == null || file2 == null || !file1.isFile() || !file2.isFile() || !file1.canRead()
@@ -327,6 +367,36 @@ public class FileUtils {
       }
     }
     return true;
+  }
+
+  /**
+   * Put the given user defined file attributes map to the given file path if the file system
+   * supports.
+   *
+   * @param path the file path
+   * @param attributes the attributes to put
+   * @param overwrite whether to overwrite an existing attribute with the same name
+   * @throws IOException if an I/O error occurs
+   */
+  public static void putUserDefinedAttributes(final Path path, Map<String, String> attributes,
+      boolean overwrite) throws IOException {
+    if (isEmpty(attributes)) {
+      return;
+    }
+    if (Files.getFileStore(shouldNotNull(path))
+        .supportsFileAttributeView(UserDefinedFileAttributeView.class)) {
+      UserDefinedFileAttributeView view =
+          Files.getFileAttributeView(path, UserDefinedFileAttributeView.class);
+      List<String> exists = defaultObject(view.list(), Collections::emptyList);
+      for (Entry<String, String> entry : attributes.entrySet()) {
+        if (isNoneNull(entry.getKey(), entry.getValue())
+            && (overwrite || !exists.contains(entry.getKey()))) {
+          view.write(entry.getKey(), Defaults.DFLT_CHARSET.encode(entry.getValue()));
+        }
+      }
+    } else {
+      logger.warning(() -> "The file system can't support user defined file attribute!");
+    }
   }
 
 }

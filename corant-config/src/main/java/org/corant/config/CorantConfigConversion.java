@@ -73,7 +73,7 @@ public class CorantConfigConversion implements Serializable {
   public static final int CUSTOMER_CONVERTER_ORDINAL = 100;
   public static final List<OrdinalConverter> BUILT_IN_CONVERTERS; // static?
   private static final long serialVersionUID = -2708805756022227289L;
-  private static Type[] objectClasses = new Type[] {Object.class};
+  private static final Type[] objectClasses = {Object.class};
   static {
     // FIXME 6.1. Built-in Converters
     List<OrdinalConverter> builtInCvts = new LinkedList<>();
@@ -90,7 +90,7 @@ public class CorantConfigConversion implements Serializable {
   /**
    * Assembly discovered converters and built in converters
    *
-   * @param converters
+   * @param converters the discovered converters
    */
   CorantConfigConversion(List<OrdinalConverter> converters) {
     converters.sort(Sortable::reverseCompare);
@@ -104,8 +104,8 @@ public class CorantConfigConversion implements Serializable {
   /**
    * Find the customer priority if not found then return CUSTOMER_CONVERTER_ORDINAL
    *
-   * @param clazz
-   * @return findPriority
+   * @param clazz the class with Priority annotation
+   * @return the annotation Priority value or 100(the default customer converter ordinal)
    */
   public static int findPriority(Class<?> clazz) {
     Priority priorityAnnot = clazz.getAnnotation(Priority.class);
@@ -114,9 +114,6 @@ public class CorantConfigConversion implements Serializable {
 
   /**
    * Get target class type from Converter class
-   *
-   * @param clazz
-   * @return getTypeOfConverter
    */
   public static Type getTypeOfConverter(Class<?> clazz) {
     if (clazz.equals(Object.class)) {
@@ -164,30 +161,26 @@ public class CorantConfigConversion implements Serializable {
             throw new IllegalArgumentException("Cannot convert config property for type "
                 + typeClass + "<" + Arrays.toString(argTypes) + ">");
           }
+        } else if (Class.class.isAssignableFrom(typeClass)) {
+          result = convertSingle(rawValue, Class.class);
+        } else if (List.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
+          result = convertCollection(rawValue, argTypes[0], ArrayList::new);
+        } else if (Set.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
+          result = convertCollection(rawValue, argTypes[0], HashSet::new);
+        } else if (Optional.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
+          result = Optional.ofNullable(convert(rawValue, argTypes[0]));
+        } else if (Supplier.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
+          result = (Supplier<?>) () -> convert(rawValue, argTypes[0]);
+        } else if (Provider.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
+          result = (Provider<?>) () -> convert(rawValue, argTypes[0]);
+        } else if (Map.class.isAssignableFrom(typeClass)) {
+          result = parameterized ? convertMap(rawValue, (ParameterizedType) type)
+              : convertMap(rawValue, (Class<?>) argTypes[0], (Class<?>) argTypes[1]);
+        } else if (!parameterized) {
+          result = convertSingle(rawValue, typeClass);
         } else {
-          if (Class.class.isAssignableFrom(typeClass)) {
-            result = convertSingle(rawValue, Class.class);
-          } else if (List.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
-            result = convertCollection(rawValue, argTypes[0], ArrayList::new);
-          } else if (Set.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
-            result = convertCollection(rawValue, argTypes[0], HashSet::new);
-          } else if (Optional.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
-            result = Optional.ofNullable(convert(rawValue, argTypes[0]));
-          } else if (Supplier.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
-            result = (Supplier<?>) () -> convert(rawValue, argTypes[0]);
-          } else if (Provider.class.isAssignableFrom(typeClass) && argTypes.length == 1) {
-            result = (Provider<?>) () -> convert(rawValue, argTypes[0]);
-          } else if (Map.class.isAssignableFrom(typeClass)) {
-            result = parameterized ? convertMap(rawValue, (ParameterizedType) type)
-                : convertMap(rawValue, (Class<?>) argTypes[0], (Class<?>) argTypes[1]);
-          } else {
-            if (!parameterized) {
-              result = convertSingle(rawValue, typeClass);
-            } else {
-              throw new IllegalArgumentException(
-                  "Cannot convert config property for type " + typeClass + "<" + argTypes + ">");
-            }
-          }
+          throw new IllegalArgumentException("Cannot convert config property for type " + typeClass
+              + "<" + Arrays.toString(argTypes) + ">");
         }
       } catch (IllegalArgumentException e) {
         throw e;
@@ -203,17 +196,16 @@ public class CorantConfigConversion implements Serializable {
   /**
    * convert array
    *
-   * @param <T>
-   * @param rawValue
-   * @param propertyComponentType
-   * @return convert
+   * @param <T> the array component type
+   * @param rawValue the source config property string to be converted
+   * @param propertyComponentType the array component class
    */
   public <T> T convertArray(String rawValue, Class<T> propertyComponentType) {
     String[] values = CorantConfigResolver.splitValue(rawValue);
     int length = values.length;
     if (length == 0) {
       return null;
-    } else if (length == 1 && values[0].equals(EMPTY_ARRAY_VALUE)) {
+    } else if (length == 1 && EMPTY_ARRAY_VALUE.equals(values[0])) {
       length = 0; // MP 2.0 ??
     }
     Object array = Array.newInstance(propertyComponentType, length);
@@ -226,12 +218,11 @@ public class CorantConfigConversion implements Serializable {
   /**
    * convert collection
    *
-   * @param <T>
-   * @param <C>
-   * @param rawValue
-   * @param propertyItemType
-   * @param collectionFactory
-   * @return convert
+   * @param <T> the target element type
+   * @param <C> the target collection type
+   * @param rawValue the source config property string to be converted
+   * @param propertyItemType the target element class
+   * @param collectionFactory the target collection constructor
    */
   public <T, C extends Collection<T>> C convertCollection(String rawValue, Type propertyItemType,
       IntFunction<C> collectionFactory) {
@@ -285,9 +276,9 @@ public class CorantConfigConversion implements Serializable {
    * Map&lt;String,String&gt; and then convert Map&lt;String,String&gt; value to the specified
    * {@code keyType} {@code valueType} type.
    *
-   * @param rawValue
-   * @param keyType
-   * @param valueType
+   * @param rawValue the source config property string to be converted
+   * @param keyType the target key type
+   * @param valueType the target value type
    * @return convertMap
    */
   public Map<Object, Object> convertMap(String rawValue, Class<?> keyType, Class<?> valueType) {
@@ -304,21 +295,21 @@ public class CorantConfigConversion implements Serializable {
    *
    * @see #tryConvertStringMap(String)
    *
-   * @param rawValue
-   * @param properyType
+   * @param rawValue the source config property string to be converted
+   * @param propertyType the target type
    * @return convertMap
    */
-  public Map<Object, Object> convertMap(String rawValue, ParameterizedType properyType) {
-    if (properyType.getActualTypeArguments().length == 0) {
+  public Map<Object, Object> convertMap(String rawValue, ParameterizedType propertyType) {
+    if (propertyType.getActualTypeArguments().length == 0) {
       return convertMap(rawValue, Object.class, Object.class);
-    } else if (properyType.getActualTypeArguments().length == 2) {
+    } else if (propertyType.getActualTypeArguments().length == 2) {
       Class<?> kt = Object.class;
       Class<?> vt = Object.class;
-      if (properyType.getActualTypeArguments()[0] instanceof Class) {
-        kt = (Class<?>) properyType.getActualTypeArguments()[0];
+      if (propertyType.getActualTypeArguments()[0] instanceof Class) {
+        kt = (Class<?>) propertyType.getActualTypeArguments()[0];
       }
-      if (properyType.getActualTypeArguments()[1] instanceof Class) {
-        kt = (Class<?>) properyType.getActualTypeArguments()[0];
+      if (propertyType.getActualTypeArguments()[1] instanceof Class) {
+        kt = (Class<?>) propertyType.getActualTypeArguments()[0];
       }
       return convertMap(rawValue, kt, vt);
     }
@@ -349,10 +340,12 @@ public class CorantConfigConversion implements Serializable {
       converter = s -> s;
       return Optional.of(forceCast(converter));
     }
-    if (forType.isArray()
-        && (converter = v -> convertArray(v, forType.getComponentType())) != null) {
+
+    if (forType.isArray() && getConverter(forType.getComponentType()).isPresent()) {
+      converter = v -> convertArray(v, forType.getComponentType());
       return Optional.of(forceCast(converter));
     }
+
     if ((converter = converters.get().get(wrap(forType))) != null) {
       return Optional.of(forceCast(converter));
     }
@@ -381,7 +374,7 @@ public class CorantConfigConversion implements Serializable {
    * Use a {@code ','} to cut the string into segments,if each segment contains {@code '='} (and
    * does not start with {@code '='}) then each segment is treated as a key-value pair; otherwise
    * the odd segment is the key of the key-value pair , The next even segment is the value of the
-   * key-value pair. All key and value are trimed.
+   * key-value pair. All key and value are trimmed.
    * </p>
    *
    * <pre>
@@ -395,7 +388,7 @@ public class CorantConfigConversion implements Serializable {
    * "key1,value1,key2,value2&x=1&y=2"      =>  { "key1":"value1", "key2":"value2&x=1&y=2" }
    * </pre>
    *
-   * @param rawValue
+   * @param rawValue the source config property string to be converted
    * @return tryConvertStringMap
    */
   protected Map<String, String> tryConvertStringMap(String rawValue) {
@@ -417,7 +410,7 @@ public class CorantConfigConversion implements Serializable {
       }
     }
     if (useKvs) {
-      values = vals.toArray(new String[vals.size()]);
+      values = vals.toArray(new String[0]);
       vals.clear();
     }
     return mapOf((Object[]) values);

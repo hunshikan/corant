@@ -49,21 +49,33 @@ public interface FetchQueryHandler {
    * Inject fetch query result into single parent query result, the parameter 'fetchResult' may be
    * modified.
    *
+   * <p>
+   * Note: In the default implementation, all injections may be only reference injections, and no
+   * deep clone, which means that must be careful when modifying the result set.
+   *
+   * @param queryParameter the query parameter
    * @param result the parent query result
    * @param fetchResults the fetched results
    * @param fetchQuery the fetch query
    */
-  void handleFetchedResult(Object result, List<?> fetchResults, FetchQuery fetchQuery);
+  void handleFetchedResult(QueryParameter queryParameter, Object result, List<?> fetchResults,
+      FetchQuery fetchQuery);
 
   /**
    * Inject fetch query result into parent query result list, the parameter 'fetchResult' may be
    * modified.
    *
+   * <p>
+   * Note: In the default implementation, all injections may be only reference injections, and no
+   * deep clone, which means that must be careful when modifying the result set.
+   *
+   * @param queryParameter the query parameter
    * @param results the parent query result list
    * @param fetchResults the fetched results
    * @param fetchQuery the fetch query
    */
-  void handleFetchedResults(List<?> results, List<?> fetchResults, FetchQuery fetchQuery);
+  void handleFetchedResults(QueryParameter queryParameter, List<?> results, List<?> fetchResults,
+      FetchQuery fetchQuery);
 
   /**
    * Resolve fetch query parameter. Generally, the fetch query parameters are composed of the parent

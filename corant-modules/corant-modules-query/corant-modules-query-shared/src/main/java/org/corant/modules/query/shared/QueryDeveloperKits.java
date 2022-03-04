@@ -30,6 +30,8 @@ import org.corant.modules.lang.javascript.NashornScriptEngines;
 import org.corant.modules.query.mapping.FetchQuery;
 import org.corant.modules.query.mapping.Query;
 import org.corant.modules.query.mapping.Script.ScriptType;
+import org.corant.modules.query.shared.ScriptProcessor.ParameterAndResult;
+import org.corant.modules.query.shared.ScriptProcessor.ParameterAndResultPair;
 import org.corant.modules.query.shared.dynamic.freemarker.FreemarkerConfigurations;
 import org.corant.shared.exception.CorantRuntimeException;
 import freemarker.core.Environment;
@@ -88,8 +90,8 @@ public class QueryDeveloperKits {
       List<Throwable> throwabls) {
     if (fq.getPredicateScript().isValid()) {
       try {
-        QueryScriptEngines.resolveFetchPredicates(fq)
-            .apply(new Object[] {new HashMap<>(), new HashMap<>()});
+        resolve(QueryScriptEngines.class).resolveFetchPredicates(fq)
+            .apply(new ParameterAndResult(null, new HashMap<>()));
       } catch (Exception e) {
         throwabls
             .add(new CorantRuntimeException(e, "FETCH-QUERY-PREDICATE-SCRIPT-ERROR : [%s -> %s]",
@@ -98,8 +100,8 @@ public class QueryDeveloperKits {
     }
     if (fq.getInjectionScript().isValid()) {
       try {
-        QueryScriptEngines.resolveFetchInjections(fq)
-            .apply(new Object[] {new ArrayList<>(), new ArrayList<>()});
+        resolve(QueryScriptEngines.class).resolveFetchInjections(fq)
+            .apply(new ParameterAndResultPair(null, new ArrayList<>(), new ArrayList<>()));
       } catch (Exception e) {
         throwabls.add(new CorantRuntimeException(e, "FETCH-QUERY-INJECT-SCRIPT-ERROR : [%s -> %s]",
             query.getName(), fq.getReferenceQuery()));
@@ -114,14 +116,15 @@ public class QueryDeveloperKits {
     query.getHints().forEach(qh -> {
       try {
         if (qh.getScript().isValid()) {
-          QueryScriptEngines.resolveQueryHintResultScriptMappers(qh)
-              .accept(new Object[] {new HashMap<>(), new HashMap<>()});
+          resolve(QueryScriptEngines.class).resolveQueryHintResultScriptMappers(qh)
+              .apply(new ParameterAndResult(null, new HashMap<>()));
         }
       } catch (Exception e) {
         throwabls.add(new CorantRuntimeException(e, "QUERY-HINT-SCRIPT-ERROR : [%s -> %s]",
             query.getName(), qh.getKey()));
       }
     });
+
   }
 
   protected static void validateQueryScript(Query query, List<Throwable> throwabls,

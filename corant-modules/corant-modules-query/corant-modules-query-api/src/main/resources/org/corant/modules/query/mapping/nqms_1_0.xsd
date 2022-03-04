@@ -92,7 +92,7 @@
                 <xsd:annotation>
                     <xsd:documentation>
                     	<![CDATA[
-                    		The query script, default script is freemarker.
+                    		The query script, default script type is FM(freemarker).
                     	]]>
                     </xsd:documentation>
                 </xsd:annotation>
@@ -141,7 +141,8 @@
         <xsd:annotation>
             <xsd:documentation>
             	<![CDATA[
-                	The other query use assign parent query result and parameters, use for one to many/one.
+					The fetch query, through fetch query, parent query can call another query based on its result set and query parameters, and inject the result set of the another query into the result set of itself according to appropriate conditions. 
+In the default implementation, all injections may be only reference injections, and nodeep clone, which means that must be careful when modifying the result set.
                 ]]>
             </xsd:documentation>
         </xsd:annotation>
@@ -213,8 +214,10 @@
             <xsd:annotation>
                 <xsd:documentation>
                 	<![CDATA[
-                    The fetch query result size, default is 1024. If the size value is 0, 
-                    it means no size limit, the underlying data source may have a limit such elastic search.
+                    Specify the number of records that fetchquery is expected to return. 
+                    less than 1 indicate unlimited (the underlying database may have constraints),
+                    default is unlimited.
+                    Note: Must be careful when using this attribute, as there may be unexpected results. 
                     ]]>
                 </xsd:documentation>
             </xsd:annotation>
@@ -453,6 +456,16 @@
                     <xsd:documentation><![CDATA[Specify that the script language is Kotlin.]]></xsd:documentation>
                 </xsd:annotation>
             </xsd:enumeration>
+            <xsd:enumeration value="CDI">
+                <xsd:annotation>
+                    <xsd:documentation><![CDATA[Specify that the script is java CDI named qualifier]]></xsd:documentation>
+                </xsd:annotation>                
+            </xsd:enumeration>      
+            <xsd:enumeration value="JSE">
+                <xsd:annotation>
+                    <xsd:documentation><![CDATA[Specify that the script is json expression]]></xsd:documentation>
+                </xsd:annotation>                
+            </xsd:enumeration>                     
         </xsd:restriction>
     </xsd:simpleType>    
         
